@@ -5,23 +5,23 @@ import math
 guanyu = {
     "name": "guanyu",
     "country": "shu",
-    "basic_power": 97,
-    "power_up": 2.68,
-    "basic_defense": 97,
-    "defense_up": 2.04,
-    "basic_intelligence": 79,
-    "intelligence_up": 1.05,
-    "basic_speed": 74,
-    "speed_up": 1.3,
+    "basic_power": 97,  # 默认1级初始武力值
+    "power_up": 2.68,  # 每升 1 级提升的武力值
+    "basic_defense": 97,  # 默认 1 级初始防御值
+    "defense_up": 2.04,  # 每升 1 级提升的防御值
+    "basic_intelligence": 79,  # 默认 1 级初始智力值
+    "intelligence_up": 1.05,  # 每升 1 级提升的智力值
+    "basic_speed": 74,  # 默认 1 级初始速度值
+    "speed_up": 1.3,  # 每升 1 级提升的速度值
     "self_tactics": {""},  # 自带战法
-    "type": "legend",  # legend or sp
+    "type": "normal",  # 普通 or sp
     "pike": "s_level",  # 枪兵 S
     "shield": "a_level",  # 盾兵 A
     "bow": "c_level",  # 弓箭 C
     "cavalry": "s_level",  # 骑兵 S
     "level": 50,  # 45 or 50
     "add_property": {"power": 50},  # 默认升级全加力量
-    "default_attack_type": "physical",  # 武力 or 谋略伤害
+    "default_attack_type": "physical",  # 武力 physical  or 谋略 intelligence
     "advanced_count": 0,  # 进阶数由白板到满红分为 0 到 5，每有一个红度额外会多10点属性分配和2%增减伤
     "is_dynamic": False,  # 是否为动态
     "is_classic": False,  # 是否为典藏
@@ -45,20 +45,31 @@ class BattleService:
             addition *= 0.7
         return addition
 
-    def get_general_property(self, general_fight, property_type, property_up):
+    def get_general_property(self, general_info, property_type, property_up):
         """
         get final property value
-        :param general_fight: general_fight_info
+        :param general_info: general_info
         :param property_type: basic_power / basic_intelligence / basic_speed
-        :param property_up: power_up / intelligence_up / speed_up
+        :param property_up: power_up / intelligence_up / speed_up 每个等级提升的属性值
         :return:
         """
-        property_value = (
-            general_fight["general"][property_up] * general_fight["general"]["level"]
-        ) + general_fight["general"][property_type]
+        if general_info["default_attack_type"] == "physical":
+            # 如果为物理将领，武力基础值 + 等级 * 每级武力提升 + 满级时 50 点属性加成
+            final_power = (
+                general_info["basic_power"] + general_info["level"] * general_info["power_up"]
+            ) + general_info["add_property"].get("power", 0)
+        else:
+            final_intelligence = (
+                general_info["basic_intelligence"] + general_info["level"] * general_info["power_up"]
+            ) + general_info["add_property"].get("intelligence", 0)
+
+        final_speed = (
+            general_info["basic_speed"] + general_info["level"] * general_info["speed_up"]
+        ) + general_info["add_property"].get("speed", 0)
+
         if general_fight["general"]["add_property"] == "default":
             to_fight_type = general_fight["general"].get(general_fight["fight_arm"])
-            ext = self.arms_to_property(to_fight_type)
+            ext = self._arms_to_property(to_fight_type)
             if general_fight["general"]["level"] < 50:
                 final_value = (property_value + 40) * ext + 20
             else:
@@ -72,6 +83,24 @@ class BattleService:
         defender_troops, attacker_advanced_bonus, defender_advanced_bonus, attacker_basic_bonus,
         defender_basic_bonus, morale, troop_restriction, skill_coefficient, special_damage_bonus
     ):
+        """
+
+        :param attacker_level: 攻击者等级
+        :param defender_level: 防御者等级
+        :param attacker_attr:
+        :param defender_attr:
+        :param attacker_troops:
+        :param defender_troops:
+        :param attacker_advanced_bonus:
+        :param defender_advanced_bonus:
+        :param attacker_basic_bonus:
+        :param defender_basic_bonus:
+        :param morale:
+        :param troop_restriction:
+        :param skill_coefficient:
+        :param special_damage_bonus:
+        :return:
+        """
         # 1. 基础伤害
         base_damage = self.calculate_base_damage(
             attacker_level, defender_level, attacker_attr, defender_attr, attacker_troops
@@ -98,7 +127,7 @@ class BattleService:
         final_damage = raw_damage * (1 - morale_modifier) * troop_modifier * (skill_coefficient / 100)
 
         # 5. 浮动伤害
-        float_damage = final_damage * (0.86 + (0.94 - 0.86) * math.random())
+        float_damage = final_damage * (round(random.uniform(0.86, 0.94), 2))
 
         # 6. 最终伤害
         final_damage_with_bonus = float_damage * special_damage_bonus
@@ -156,4 +185,22 @@ class BattleService:
     #     return hurt_v
     #
     # def _soldiers_number_hurt_value(self):
+
+
+if __name__ == "__main__":
+    # Example usage:
+    attacker_level = 50
+    defender_level = 50
+    attacker_attr = 250
+    defender_attr = 120
+    attacker_troops = 10000
+    defender_troops = 10000
+    attacker_advanced_bonus = 10
+    defender_advanced_bonus = 5
+    attacker_basic_bonus = 20
+    defender_basic_bonus = 15
+    morale = 100
+    troop_restriction = True  # True if attacker troop restricts defender, False otherwise
+    skill_coefficient = 100  # percentage
+    special_damage_bonus = 1.2  # 20% additional damage
 
