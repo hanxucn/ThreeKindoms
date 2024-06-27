@@ -15,13 +15,11 @@ guanyu = {
     "speed_up": 1.3,  # 每升 1 级提升的速度值
     "self_tactics": {""},  # 自带战法
     "type": "normal",  # 普通 or sp
-    "pike": "s_level",  # 枪兵 S
-    "shield": "a_level",  # 盾兵 A
-    "bow": "c_level",  # 弓箭 C
-    "cavalry": "s_level",  # 骑兵 S
+    # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
+    "troop_adaptability": {"pike": "s_level", "shield": "a_level", "bow": "c_level", "cavalry": "s_level"},
     "level": 50,  # 45 or 50
-    "add_property": {"power": 50},  # 默认升级全加力量
-    "default_attack_type": "physical",  # 武力 physical  or 谋略 intelligence
+    # "add_property": {"power": 50},  # 默认升级全加力量，这里改用前端传递
+    "default_attack_type": "physical",  # 武力 physical  or 谋略 intelligence or 综合 combined
     "advanced_count": 0,  # 进阶数由白板到满红分为 0 到 5，每有一个红度额外会多10点属性分配和2%增减伤
     "is_dynamic": False,  # 是否为动态
     "is_classic": False,  # 是否为典藏
@@ -33,50 +31,52 @@ class BattleService:
         self.own_team = own_team
         self.enemy_team = enemy_team
 
-    def _arms_to_property(self, arms_type):
+    def _arms_type_to_property(self, general_adaptability):
         addition = 1
-        if arms_type == "s_level":
+        if general_adaptability == "s_level":
             addition *= 1.2
-        elif arms_type == "a_level":
+        elif general_adaptability == "a_level":
             addition *= 1
-        elif arms_type == "b_level":
+        elif general_adaptability == "b_level":
             addition *= 0.85
         else:
             addition *= 0.7
         return addition
 
-    def get_general_property(self, general_info, property_type, property_up):
+    def get_general_property(self, general_info, user_add_property, is_same_group=True):
         """
         get final property value
         :param general_info: general_info
-        :param property_type: basic_power / basic_intelligence / basic_speed
-        :param property_up: power_up / intelligence_up / speed_up 每个等级提升的属性值
+        :param user_add_property: {"power": 50, "intelligence": 0, "speed": 0}
         :return:
         """
-        if general_info["default_attack_type"] == "physical":
-            # 如果为物理将领，武力基础值 + 等级 * 每级武力提升 + 满级时 50 点属性加成
-            final_power = (
-                general_info["basic_power"] + general_info["level"] * general_info["power_up"]
-            ) + general_info["add_property"].get("power", 0)
-        else:
-            final_intelligence = (
-                general_info["basic_intelligence"] + general_info["level"] * general_info["power_up"]
-            ) + general_info["add_property"].get("intelligence", 0)
 
-        final_speed = (
+        # 计算将领最终武力基础值 + 等级 * 每级武力提升 + 满级时 50 点属性加成
+        final_power_value = (
+            general_info["basic_power"] + general_info["level"] * general_info["power_up"]
+        ) + general_info["add_property"].get("power", 0)
+
+        final_intelligence_value = (
+            general_info["basic_intelligence"] + general_info["level"] * general_info["power_up"]
+        ) + general_info["add_property"].get("intelligence", 0)
+
+        final_speed_value = (
             general_info["basic_speed"] + general_info["level"] * general_info["speed_up"]
         ) + general_info["add_property"].get("speed", 0)
 
-        if general_fight["general"]["add_property"] == "default":
-            to_fight_type = general_fight["general"].get(general_fight["fight_arm"])
-            ext = self._arms_to_property(to_fight_type)
-            if general_fight["general"]["level"] < 50:
-                final_value = (property_value + 40) * ext + 20
-            else:
-                final_value = (property_value + 50) * ext + 20
-            if general_fight["group_same"]:
-                final_value = final_value * 1.1
-        return final_value
+        ext = self._arms_type_to_property(general_info["troop_adaptability"])
+        final_power_value = (final_power_value + user_add_property.get("power", 0)) * ext
+        final_intelligence_value = (final_intelligence_value + user_add_property.get("intelligence", 0)) * ext
+        final_speed_value = (final_intelligence_value + user_add_property.get("speed", 0)) * ext
+        if is_same_group:
+            final_power_value = int(final_power_value * 1.1)
+            final_intelligence_value = int(final_intelligence_value * 1.1)
+            final_speed_value = int(final_speed_value * 1.1)
+        return {
+            "final_power": final_power_value,
+            "final_intelligence": final_intelligence_value,
+            "final_speed": final_speed_value,
+        }
 
     def calculate_damage(
         self, attacker_level, defender_level, attacker_attr, defender_attr, attacker_troops,
