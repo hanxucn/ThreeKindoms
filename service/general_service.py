@@ -33,8 +33,8 @@ class GeneralService:
         self.general_info = general_info
         self.skills = {}  # 自带战法 加上选择的额外两个战法
         self.alive = True
-        self.statuses = {}
-        self.buffs = {}
+        self.buff = {}
+        self.debuff = {}
 
     def is_alive(self):
         return self.alive and self.general_info["take_troops"] > 0
@@ -45,24 +45,15 @@ class GeneralService:
             self.general_info["take_troops"] = 0
             self.alive = False
 
-    def add_status(self, status, duration):
-        self.statuses[status] = duration
+    def add_buff(self, status, duration):
+        self.buff[status] = duration
 
-    def add_buff(self, buff, amount):
-        if buff in self.buffs:
-            self.buffs[buff] += amount
-        else:
-            self.buffs[buff] = amount
-
-    def add_debuff(self, debuff, amount):
-        if debuff in self.buffs:
-            self.buffs[debuff] -= amount
-        else:
-            self.buffs[debuff] = -amount
+    def add_debuff(self, status, duration):
+        self.debuff[status] = duration
 
     def execute_skills(self, defenders, battle_service):
         for skill in self.skills:
-            skill.apply_effect(self, defenders, battle_service)
+            skill.apply_effect(self, battle_service, self.general_info, defenders)
 
     def _arms_type_to_property(self, general_adaptability):
         addition = 1
@@ -134,7 +125,7 @@ class GeneralService:
 
     def ready_fight_general_property(self,  user_add_property, choose_arm_type, user_level):
         """
-        获取准备战斗时将领的数据值
+        获取准备战斗时将领的数据值，此数值计算为开始战斗前的最终属性数值。会影响
         :param user_add_property: 用户选择的加点，这个值从前端传入参数，是用户自己分配的加点（根据上面）
         :param choose_arm_type: 用户选择的兵种类型
         :param user_level: 将领的等级
@@ -142,7 +133,6 @@ class GeneralService:
         """
         # 只计算原始没有任何其他情况到对应等级的属性
         origin_general_property = self.get_general_property(self.general_info, user_level)
-        import ipdb; ipdb.set_trace()
         general_property = {
             "power": round(origin_general_property["power"] + user_add_property["power"], 2),
             "intelligence": round(origin_general_property["intelligence"] + user_add_property["intelligence"], 2),
@@ -158,7 +148,6 @@ class GeneralService:
 
 if __name__ == "__main__":
     bs = GeneralService(guanyu)
-    import ipdb; ipdb.set_trace()
     can_alloc_property = bs.overall_can_allocation_property(True, False, 5, 45)
     general_values = bs.ready_fight_general_property(
         {"power": 80, "intelligence": 0, "speed": 0, "defense": 20}, "shield", 45

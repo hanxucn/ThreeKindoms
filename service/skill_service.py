@@ -4,161 +4,197 @@ from damage_service import DamageService
 
 
 class Skill:
-    def __init__(self, name, skill_type, quality, source, source_general, target, probability, effect):
+    def __init__(self, name, skill_type, quality, source, source_general, target, effect):
         self.name = name
         self.skill_type = skill_type
         self.quality = quality
-        self.source = source  # 自带战法或传承战法
-        self.source_general = source_general  # 来源武将
-        self.target = target  # 目标类型（单体或群体）
-        self.probability = probability  # 发动概率
-        self.effect = effect  # 战法效果描述
+        self.source = source
+        self.source_general = source_general
+        self.target = target
+        self.effect = effect
 
-    def apply_effect(self, attacker, defenders, battle_service):
-        if self.skill_type == 'active':
-            return self.apply_active_effect(attacker, defenders, battle_service)
-        elif self.skill_type == 'command':
-            return self.apply_command_effect(attacker, defenders, battle_service)
-        elif self.skill_type == 'troop':
-            return self.apply_troop_effect(attacker, defenders, battle_service)
-        elif self.skill_type == 'assault':
-            return self.apply_assault_effect(attacker, defenders, battle_service)
+    def is_triggered(self, probability) -> bool:
+        """
+        Determine if a skill is triggered based on the given probability.
 
-    def apply_active_effect(self, attacker, defenders, battle_service):
-        if random.random() < self.probability:
-            print(f"{attacker.name}发动了战法{self.name}")
-            if self.target == 'single':
-                target = random.choice(defenders)
-                self.apply_damage_and_effects(attacker, [target], battle_service)
-            elif self.target == 'group':
-                targets = random.sample(defenders, min(2, len(defenders)))
-                self.apply_damage_and_effects(attacker, targets, battle_service)
-                self.apply_follow_up_effects(attacker, defenders, battle_service)
+        Args:
+        probability (float): The probability of triggering the skill, represented as a percentage (0-100).
 
-    def apply_damage_and_effects(self, attacker, targets, battle_service):
-        for target in targets:
-            damage = battle_service.calculate_damage(
-                attacker.level, target.level, attacker.attr, target.attr,
-                attacker.troops, target.troops, attacker.advanced_bonus,
-                target.advanced_bonus, attacker.basic_bonus, target.basic_bonus,
-                attacker.speed, self.effect['coefficient'], self.effect.get('special_damage_bonus', 1)
-            )
-            target.take_damage(damage)
-            print(f"{attacker.name}对{target.name}造成了{damage}点伤害，{target.name}剩余兵力{target.troops}")
+        Returns:
+        bool: True if the skill is triggered, False otherwise.
+        """
+        return random.random() < probability
 
-            # 处理状态效果
-            if 'status' in self.effect:
-                for status in self.effect['status']:
-                    target.add_status(status, self.effect['status_duration'])
-                    print(f"{target.name}进入{status}状态，持续{self.effect['status_duration']}回合")
+    def simulate_trigger(self, probability, turns=8):
+        """Simulate skill trigger status for each turn"""
+        return [self.is_triggered(probability) for _ in range(turns)]
 
-    def apply_follow_up_effects(self, attacker, defenders, battle_service):
-        for target in defenders:
-            if target.has_negative_status():
-                damage = battle_service.calculate_damage(
-                    attacker.level, target.level, attacker.attr, target.attr,
-                    attacker.troops, target.troops, attacker.advanced_bonus,
-                    target.advanced_bonus, attacker.basic_bonus, target.basic_bonus,
-                    attacker.speed, self.effect['follow_up_coefficient'], self.effect.get('special_damage_bonus', 1)
-                )
-                target.take_damage(damage)
-                print(f"{attacker.name}对{target.name}进行后续攻击造成了{damage}点伤害，{target.name}剩余兵力{target.troops}")
+    def apply_effect(self, battle_service, attacker, defenders):
+        raise NotImplementedError("Subclasses should implement this method")
 
-    def apply_command_effect(self, attacker, defenders, battle_service):
-        if self.target == 'self_team':
-            for general in battle_service.own_team.get_generals():
-                for buff, amount in self.effect.items():
-                    general.add_buff(buff, amount)
-                    print(f"{general.name}获得了{buff}提升，数量{amount}")
-        elif self.target == 'enemy_team':
-            for general in battle_service.enemy_team.get_generals():
-                for debuff, amount in self.effect.items():
-                    general.add_debuff(debuff, amount)
-                    print(f"{general.name}受到了{debuff}效果，数量{amount}")
 
-    def apply_troop_effect(self, attacker, defenders, battle_service):
-        if self.target == 'self_team':
-            for general in battle_service.own_team.get_generals():
-                if general.attr['兵种'] == self.effect['required_troop']:
-                    for buff, amount in self.effect['buffs'].items():
-                        general.add_buff(buff, amount)
-                        print(f"{general.name}因兵种战法{self.name}获得了{buff}提升，数量{amount}")
-            if 'initial_effect' in self.effect:
-                for target in random.sample(defenders, min(2, len(defenders))):
-                    target.add_status(self.effect['initial_effect']['status'], self.effect['initial_effect']['duration'])
-                    print(f"{target.name}进入{self.effect['initial_effect']['status']}状态，持续{self.effect['initial_effect']['duration']}回合")
+class ActiveSkill(Skill):
+    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
+        super().__init__(name, skill_type, quality, source, source_general, target, effect)
+        self.activation_type = activation_type
+        self.skill_type = "active"
 
-    def apply_assault_effect(self, attacker, defender, battle_service):
-        if random.random() < self.probability:
-            print(f"{attacker.name}发动了突击战法{self.name}")
-            damage = battle_service.calculate_damage(
-                attacker.level, defender.level, attacker.attr, defender.attr,
-                attacker.troops, defender.troops, attacker.advanced_bonus,
-                defender.advanced_bonus, attacker.basic_bonus, defender.basic_bonus,
-                attacker.speed, self.effect['coefficient'], self.effect.get('special_damage_bonus', 1)
-            )
+    def active_skill_type(self, battle_service, attacker, defenders):
+        if self.is_triggered(self.effect.get("probability", 1)):
+            # 如果是准备战法，当此回合判定 is_triggered 发动成功，战法效果会在下一回合开始
+            if self.activation_type == "prepare":
+                self.prepare_effect(attacker, defenders, battle_service)
+            # 如果是瞬时战法，当此回合判定 is_triggered 发动成功，战法效果会在人物当前回合开始
+            elif self.activation_type == "instant":
+                self.instant_effect(attacker, defenders, battle_service)
+
+    def simulate_trigger(self, probability, turns=8):
+        """Simulate skill trigger status for each turn"""
+        trigger_list = [False] * turns
+        if self.activation_type == "instant":
+            trigger_list = [self.is_triggered(probability) for _ in range(turns)]
+        elif self.activation_type == "prepare":
+            for turn in range(turns):
+                if self.is_triggered(probability):
+                    if turn + 1 < turns:
+                        trigger_list[turn + 1] = True
+        return trigger_list
+
+    def prepare_effect(self, attacker, defenders, battle_service):
+        pass
+
+    def instant_effect(self, attacker, defenders, battle_service):
+        # Implement the instant effect logic for your specific skill here
+        pass
+
+
+class HealingSkill(ActiveSkill):
+    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type, healing_rate):
+        super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
+        self.healing_rate = healing_rate
+
+    def instant_effect(self, attacker, defenders, battle_service):
+        # Implementing healing logic
+        for defender in defenders:
+            if random.random() < self.effect.get("probability"):
+                healing_amount = self.calculate_healing(attacker)
+                defender.heal(healing_amount)
+                print(f"{self.name} heals {defender.name} for {healing_amount} troops.")
+
+    def calculate_healing(self, attacker):
+        highest_stat = max(attacker.strength, attacker.intelligence)
+        return highest_stat * self.healing_rate
+
+
+class WeizhenhuaxiaSkill(ActiveSkill):
+    def prepare_effect(self, attacker, defenders, battle_service):
+        for defender in defenders:
+            if random.random() < self.effect['status_probability']:
+                defender.enter_state(self.effect['status'][0])  # 缴械
+            if random.random() < self.effect['status_probability']:
+                defender.enter_state(self.effect['status'][1])  # 计穷
+            damage = battle_service.calculate_damage(attacker, defender, self.effect['attack_coefficient'])
             defender.take_damage(damage)
-            print(f"{attacker.name}对{defender.name}造成了{damage}点伤害，{defender.name}剩余兵力{defender.troops}")
-            if 'status' in self.effect:
-                for status in self.effect['status']:
-                    defender.add_status(status, self.effect['status_duration'])
-                    print(f"{defender.name}进入{status}状态，持续{self.effect['status_duration']}回合")
+        attacker.increase_damage(self.effect['self_buff']['amount'])
 
 
 if __name__ == "__main__":
     # 创建技能
-    skill_weizhenhuaxia = Skill(
+    skill_weizhenhuaxia = ActiveSkill(
         name="威震华夏",
         skill_type="active",
         quality="S",
         source="自带战法",
         source_general="关羽",
         target="group",
-        probability=0.35,
         effect={
-            "coefficient": 146,
-            "special_damage_bonus": 1.36,
-            "status": ["缴械", "计穷"],
-            "status_probability": 0.5,
-            "status_duration": 1,
-            "self_buff": {
-                "type": "兵刃伤害",
-                "amount": 36,
-                "duration": 2,
-                "main_general_bonus": 0.65
+            # normal 表示正常情况下的技能描述； leader 表示如果装备此战法的为主将有不同的技能描述
+            "normal": {
+                "probability": 0.35,
+                "attack_coefficient": 1.46,  # 此为 DamageService 里的 skill_coefficient
+                "release_range": "all",
+                "target": "enemy",
+                "to_enemy_buff": {
+                    "status": ["no_normal_attack", "no_skill_release"],
+                    "release_range": "all",
+                    "duration": 1,
+                },
+                "status_probability": 0.5,
+                "self_buff": {
+                    "type": "physical_damage",
+                    "damage_bonus": 1.36,
+                    "duration": 2,
+                }
+            },
+            "leader": {
+                "probability": 0.35,
+                "attack_coefficient": 1.46,
+                "release_range": "all",
+                "target": "enemy",
+                "to_enemy_buff": {
+                    "status": ["no_normal_attack", "no_skill_release"],
+                    "release_range": "all",
+                    "duration": 1,
+                },
+                "status_probability": 0.65,
+                "self_buff": {
+                    "type": "physical_damage",
+                    "damage_bonus": 1.36,
+                    "duration": 2,
+                }
             }
-        }
+        },
+        activation_type="prepare",
     )
 
-    skill_jiangdongmenghu = Skill(
+    skill_jiangdongmenghu = ActiveSkill(
         name="江东猛虎",
         skill_type="active",
         quality="S",
         source="自带战法",
         source_general="孙坚",
         target="group",
-        probability=0.5,
         effect={
-            "coefficient": 103,
-            "status": ["嘲讽"],
-            "status_duration": 2
-        }
+            "normal": {
+                "probability": 0.5,
+                "release_range": "2",
+                "target": "enemy",
+                "attack_coefficient": 1.26,
+                "status": ["taunt"],
+                "status_duration": 2
+            },
+            "leader": {
+                "probability": 0.5,
+                "release_range": "2",
+                "target": "enemy",
+                "attack_coefficient": 1.26,
+                "status": ["taunt"],
+                "status_duration": 2,
+                "self_buff": {
+                    "injury_tolerance": 0.8
+                }
+            }
+
+        },
+        activation_type="instant",
     )
 
-    skill_shimianmaifu = Skill(
+    skill_shimianmaifu = ActiveSkill(
         name="十面埋伏",
         skill_type="active",
         quality="S",
         source="自带战法",
         source_general="程昱",
         target="group",
-        probability=0.35,
         effect={
+            "probability": 0.35,
             "coefficient": 74,
-            "status": ["禁疗", "叛逃"],
+            # 禁疗状态和叛逃状态
+            "status": ["no_healing", "defection"],
             "status_duration": 2,
-            "follow_up_coefficient": 96
-        }
+            "attack_coefficient": 0.96
+        },
+        activation_type="prepare",
     )
 
     skill_wudangfeijun = Skill(
@@ -168,17 +204,19 @@ if __name__ == "__main__":
         source="自带战法",
         source_general="王平",
         target="self_team",
-        probability=1.0,
         effect={
-            "required_troop": "弓兵",
+            "probability": 1.0,
+            "required_troop": "archer",
             "buffs": {
-                "统率": 22,
-                "速度": 22
+                "defense": 22,
+                "speed": 22,
+                "range": "all",
+                "target": "self",
             },
             "initial_effect": {
-                "status": "中毒",
+                "status": "poison",
                 "duration": 3,
-                "coefficient": 80
+                "attack_coefficient": 0.8
             }
-        }
+        },
     )
