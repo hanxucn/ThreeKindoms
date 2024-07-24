@@ -17,8 +17,8 @@ class DamageService:
         :param defender_attr: 防御者属性值（如统率或智力）
         :param attacker_troops: 攻击者带兵数量
         :param defender_troops: 防御者带兵数量
-        :param attacker_advanced_bonus:  攻击者进阶增伤
-        :param defender_advanced_bonus:  防御者进阶减伤
+        :param attacker_advanced_bonus:  攻击者进阶数量（红度）
+        :param defender_advanced_bonus:  防御者进阶数量（红度）
         :param attacker_basic_bonus: 攻击者普通增伤，如战法
         :param defender_basic_bonus: 防御者普通减伤，如战法，减伤上限90%
         :param morale: 士气值

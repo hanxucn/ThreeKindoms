@@ -31,13 +31,21 @@ guanyu = {
 class GeneralService:
     def __init__(self, general_info):
         self.general_info = general_info
-        self.skills = {}  # 自带战法 加上选择的额外两个战法
+        self.skills = []  # 自带战法 加上选择的额外两个战法
         self.alive = True
         self.buff = {}
         self.debuff = {}
+        self.default_take_troops = 10000
+        self.default_advanced_bonus = 1
 
     def is_alive(self):
         return self.alive and self.general_info["take_troops"] > 0
+
+    def has_command_skill(self):
+        for skill in self.skills:
+            if "command" in skill.get("skill_type"):
+                return True
+        return False
 
     def take_damage(self, damage):
         self.general_info["take_troops"] -= damage

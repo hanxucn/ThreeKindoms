@@ -1,3 +1,5 @@
+import random
+
 from damage_service import DamageService
 
 
@@ -27,7 +29,7 @@ class BattleService:
                 general.general_info.update(ready_value)
 
     def start_battle(self):
-        while self.round < 8 and self.team1.is_alive() and self.team2.is_alive():
+        while self.round < 8 and self.team1[0].is_alive() and self.team2[0].is_alive():
             self.round += 1
             self.execute_round()
         self.determine_winner()
@@ -35,8 +37,8 @@ class BattleService:
     def execute_round(self):
         actions = []
         for general in self.team1.get_generals() + self.team2.get_generals():
-            if "先攻" in general.statuses:
-                actions.append((general, "先攻", general.get_general_property(general.general_info, 45)["speed"]))
+            if "initiative" in general.buff:
+                actions.append((general, "initiative", general.get_general_property(general.general_info, 45)["speed"]))
         actions.sort(key=lambda x: x[2], reverse=True)
 
         for action in actions:
@@ -46,18 +48,25 @@ class BattleService:
 
     def execute_action(self, general):
         # 根据当前状态执行行动
-        if "震慑" in general.statuses:
-            return  # 震慑状态下不能行动
-        if "缴械" in general.statuses:
+        survive_defenders = [g for g in self.team2.get_generals() if g.is_alive()]
+        i = random.randint(0, len(survive_defenders))
+        target = self.team2.get_generals()[i]
+        if "is_stunned" in general.debuff:
+            if general.has_command_skill():
+                general.execute_skills(self.team2.get_generals(), self)  #
+            return  # 震慑状态下不能普通攻击和释放主动、突击技能；可以发动指挥、兵种和阵法
+        if "is_disarmed " in general.debuff:
             general.execute_skills(self.team2.get_generals(), self)  # 不能普通攻击，但可以释放技能
             return
-        if "伪报" in general.statuses:
+        if "is_discommand" in general.debuff:
             general.execute_skills(self.team2.get_generals(), self)  # 指挥战法和被动战法失效，但可以释放技能
+            self.normal_attack(general, target)
             return
-        if "嘲讽" in general.statuses:
-            target = [g for g in self.team2.get_generals() if "嘲讽" in g.statuses]
-            if target:
-                self.normal_attack(general, target[0])
+        if "is_taunted" in general.debuff:
+            targets = [g for g in self.team2.get_generals() if "is_taunted" in g.buff]
+            if targets:
+                self.normal_attack(general, targets[0])
+                general.execute_skills(self.team2.get_generals(), self)  # 正常释放技能
             return
         general.execute_skills(self.team2.get_generals(), self)  # 正常释放技能
         self.normal_attack(general, self.team2.get_generals()[0])  # 普通攻击主将
@@ -66,17 +75,25 @@ class BattleService:
         damage = self.calculate_damage(attacker, defender)
         defender.take_damage(damage)
 
-    def calculate_damage(self, attacker, defender):
+    def calculate_damage(self, attacker, defender, attack_type):
         # 这里可以调用之前的 DamageService 来计算伤害
         damage_service = DamageService()
-        attacker_attr = attacker.get_general_property(attacker.general_info, 45)["power"]
-        defender_attr = defender.get_general_property(defender.general_info, 45)["defense"]
-        return damage_service.calculate_damage(
-            45, 45, attacker_attr, defender_attr,
-            attacker.general_info["take_troops"], defender.general_info["take_troops"],
-            10, 10, 10,
-            10, 100, False, 100
-        )
+        if attack_type == "physical":
+
+            attacker_attr = attacker.get_general_property(attacker.general_info, 45)["power"]
+            defender_attr = defender.get_general_property(defender.general_info, 45)["defense"]
+            return damage_service.calculate_damage(
+                50, 50, attacker_attr, defender_attr,
+                attacker.default_take_troops, defender.default_take_troops,
+                10, 10, 10,
+                10, 100, False, 100
+            )
+        elif attack_type == "intelligent":
+            attacker_attr = attacker.get_general_property(attacker.general_info, 45)["intelligence"]
+            defender_attr = defender.get_general_property(defender.general_info, 45)["intelligence"]
+            return damage_service.calculate_damage(
+
+            )
 
     def determine_winner(self):
         if not self.team1.is_alive():
