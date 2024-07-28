@@ -4,6 +4,8 @@ from damage_service import DamageService
 
 
 class Skill:
+    name = None
+
     def __init__(self, name, skill_type, quality, source, source_general, target, effect):
         self.name = name
         self.skill_type = skill_type
@@ -29,15 +31,16 @@ class Skill:
         """Simulate skill trigger status for each turn"""
         return [self.is_triggered(probability) for _ in range(turns)]
 
-    def apply_effect(self, battle_service, attacker, defenders):
+    def apply_effect(self, battle_service, attacker, defenders, current_turn):
         raise NotImplementedError("Subclasses should implement this method")
 
 
 class ActiveSkill(Skill):
-    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
+    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type="prepare"):
         super().__init__(name, skill_type, quality, source, source_general, target, effect)
         self.activation_type = activation_type
         self.skill_type = "active"
+        self.trigger_list = self.simulate_trigger(self.effect.get("probability", 1))
 
     def active_skill_type(self, battle_service, attacker, defenders):
         if self.is_triggered(self.effect.get("probability", 1)):
@@ -60,12 +63,25 @@ class ActiveSkill(Skill):
                         trigger_list[turn + 1] = True
         return trigger_list
 
+    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+        if self.trigger_list[current_turn]:
+            if self.activation_type == "prepare":
+                self.prepare_effect(attacker, defenders, battle_service)
+            elif self.activation_type == "instant":
+                self.instant_effect(attacker, defenders, battle_service)
+
     def prepare_effect(self, attacker, defenders, battle_service):
         pass
 
     def instant_effect(self, attacker, defenders, battle_service):
         # Implement the instant effect logic for your specific skill here
         pass
+
+
+class PassiveSkill(Skill):
+    def __init__(self, name, skill_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, quality, source, source_general, target, effect)
+        self.skill_type = "passive"
 
 
 class HealingSkill(ActiveSkill):
@@ -87,22 +103,73 @@ class HealingSkill(ActiveSkill):
 
 
 class WeizhenhuaxiaSkill(ActiveSkill):
+    name = "weizhenhuaxia"
+
+    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
+        super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
+        self.trigger_list = self.simulate_trigger(self.effect['normal']['probability'])
+
     def prepare_effect(self, attacker, defenders, battle_service):
         for defender in defenders:
-            if random.random() < self.effect['status_probability']:
-                defender.enter_state(self.effect['status'][0])  # 缴械
-            if random.random() < self.effect['status_probability']:
-                defender.enter_state(self.effect['status'][1])  # 计穷
-            damage = battle_service.calculate_damage(attacker, defender, self.effect['attack_coefficient'])
+            if random.random() < self.effect['normal']['status_probability']:
+                defender.add_debuff("no_normal_attack", 1)  # 缴械
+            if random.random() < self.effect['normal']['status_probability']:
+                defender.add_debuff("no_skill_release", 1)  # 计穷
+            damage = battle_service.calculate_damage(
+                attacker, defender, "physical", self.effect['normal']['attack_coefficient']
+            )
             defender.take_damage(damage)
-        attacker.increase_damage(self.effect['self_buff']['amount'])
+        attacker.add_buff("damage_bonus", self.effect['normal']['self_buff']['damage_bonus'])
+
+    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+        if self.trigger_list[turn]:
+            if self.activation_type == "prepare" and turn + 1 < len(self.trigger_list):
+                self.trigger_list[turn + 1] = True
+            else:
+                self.prepare_effect(attacker, defenders, battle_service)
+
+
+class QianlizoudanqiSkill(PassiveSkill):
+    name = "qianlizoudanqi"
+
+    def __init__(self, name, skill_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, quality, source, source_general, target, effect)
+        self.counter_triggered = False
+
+    def check_and_apply_effect(self, battle_service, attacker, current_turn):
+        if attacker.is_self_preparing_skill() and self.is_triggered_by_power(attacker):
+            attacker.add_buff("insight", 2)
+            attacker.add_buff("power_boost", 2)
+            print(f"{attacker.general_info['name']}获得洞察状态并提高50武力，持续2回合。")
+
+    def is_triggered_by_power(self, attacker):
+        power = attacker.get_general_property(attacker.general_info, 45)["power"]
+        probability = min(1, 0.7 + power / 1000)  # 受武力影响的触发概率
+        return random.random() < probability
+
+    def counter_attack(self, defender, attacker, battle_service):
+        if not self.counter_triggered:
+            damage_service = DamageService()
+            attack_attr = defender.get_general_property(defender.general_info, 45)["power"]
+            defend_attr = attacker.get_general_property(attacker.general_info, 45)["defense"]
+            damage = damage_service.calculate_damage(
+                50, 50, attack_attr, defend_attr,
+                defender.default_take_troops, attacker.default_take_troops,
+                10, 10, 10, 10, 100, False, self.effect['counter_damage_rate']
+            )
+            attacker.take_damage(damage)
+            self.counter_triggered = True
+            print(f"{defender.general_info['name']}反击{attacker.general_info['name']}，造成{damage}点伤害。")
+
+    def reset_counter(self):
+        self.counter_triggered = False
 
 
 if __name__ == "__main__":
     # 创建技能
     skill_weizhenhuaxia = ActiveSkill(
         name="威震华夏",
-        skill_type="active",
+        skill_type="prepare_active",
         quality="S",
         source="自带战法",
         source_general="关羽",
@@ -149,7 +216,7 @@ if __name__ == "__main__":
 
     skill_jiangdongmenghu = ActiveSkill(
         name="江东猛虎",
-        skill_type="active",
+        skill_type="instant_active",
         quality="S",
         source="自带战法",
         source_general="孙坚",
@@ -181,7 +248,7 @@ if __name__ == "__main__":
 
     skill_shimianmaifu = ActiveSkill(
         name="十面埋伏",
-        skill_type="active",
+        skill_type="prepare_active",
         quality="S",
         source="自带战法",
         source_general="程昱",

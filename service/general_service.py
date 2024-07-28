@@ -1,6 +1,8 @@
 import random
 import math
 
+from skill_service import WeizhenhuaxiaSkill
+
 
 guanyu = {
     "name": "guanyu",
@@ -13,39 +15,92 @@ guanyu = {
     "intelligence_up": 1.05,  # 每升 1 级提升的智力值
     "basic_speed": 74,  # 默认 1 级初始速度值
     "speed_up": 1.3,  # 每升 1 级提升的速度值
-    "self_skill": {""},  # 自带战法
-    "skills": {},  # 选择的战法
+    "self_skill": WeizhenhuaxiaSkill,  # 自带战法
     "type": "normal",  # 普通 or sp
     # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
     "troop_adaptability": {"pike": "s_level", "shield": "a_level", "bow": "c_level", "cavalry": "s_level"},
     # "level": 50,  # 45 or 50  这个值从前端传入参数
     # "add_property": {"power": 50},  # 默认升级全加力量，这里改用前端传递
     "default_attack_type": "physical",  # 武力 physical  or 谋略 intelligence or 综合 combined
-    "fusion_count": 0,  # 进阶数由白板到满红分为 0 到 5，每有一个红度额外会多10点属性分配和2%增减伤
     "has_dynamic": True,  # 是否有动态人物
     "take_troops": 10000,  # 默认初始带满兵1W，如果为 45级 则为 95000
-    # "is_classic": False,  # 是否为典藏，这个值从前端传入参数
 }
 
 
 class GeneralService:
-    def __init__(self, general_info):
+    # 每个人物初始化时需要填入任务的基本信息和可分配的属性，
+    #
+    # is_dynamic: 是否是动态人物， 如果是会多 10 的属性分配
+    # is_classic: 是否典藏，如果是会多 10 的属性分配
+    # fusion_count: 进阶数，每进阶一个红度会减伤 2% 和增加对敌人伤害 2%，且多 10 点属性分配
+    # user_level: 人物等级
+    # equipped_skills: 人物装配的其他两个技能
+    # user_add_property：可分配属性，需要先调用 overall_can_allocation_property() 方法计算，由前端提供值
+    def __init__(self, general_info, is_dynamic, is_classic, fusion_count, user_level=None, equipped_skills=None, user_add_property=None):
         self.general_info = general_info
-        self.skills = []  # 自带战法 加上选择的额外两个战法
+        self.skills = [self.general_info.self_skill].extend(equipped_skills)
         self.alive = True
         self.buff = {}
         self.debuff = {}
         self.default_take_troops = 10000
-        self.default_advanced_bonus = 1
+        self.is_dynamic = is_dynamic
+        self.is_classic = is_classic
+        self.fusion_count = fusion_count
+        self.user_level = user_level if user_level else 50
+        self.can_allocation_property = self.overall_can_allocation_property()
+        self.skill_types = self.get_skill_types()
+        self.default_user_add_property = {
+            "power": self.can_allocation_property,
+            "intelligence": 0,
+            "speed": 0,
+            "defense": 0
+        }
+        self.user_add_property = user_add_property
 
     def is_alive(self):
         return self.alive and self.general_info["take_troops"] > 0
 
-    def has_command_skill(self):
+    def get_skill_types(self):
+        skill_types = set()
         for skill in self.skills:
-            if "command" in skill.get("skill_type"):
-                return True
+            skill_types.add(skill.skill_type)
+        return list(skill_types)
+
+    def has_command_or_troop_skill(self):
+        if "command" in self.skill_types or "troop" in self.skill_types:
+            return True
         return False
+
+    def has_active_or_troop_skill(self):
+        if "active" in self.skill_types or "troop" in self.skill_types:
+            return True
+        return False
+
+    def has_troop_skill(self):
+        if "troop" in self.skill_types:
+            return True
+        return False
+
+    def only_has_assault_skill(self):
+        # 当人物只装备了突击战法
+        if self.skill_types and len(self.skill_types) == 1 and self.skill_types[0] == "assault":
+            return True
+        return False
+
+    def only_has_passive_skill(self):
+        # 当人物只装备了被动战法
+        if self.skill_types and len(self.skill_types) == 1 and self.skill_types[0] == "passive":
+            return True
+        return False
+
+    def only_has_command_skill(self):
+        # 当人物只装备了指挥战法
+        if self.skill_types and len(self.skill_types) == 1 and self.skill_types[0] == "command":
+            return True
+        return False
+
+    def get_user_add_property(self):
+        return self.user_add_property
 
     def take_damage(self, damage):
         self.general_info["take_troops"] -= damage
@@ -59,9 +114,26 @@ class GeneralService:
     def add_debuff(self, status, duration):
         self.debuff[status] = duration
 
-    def execute_skills(self, defenders, battle_service):
+    def include_skill_type(self):
+        skill_types = []
         for skill in self.skills:
-            skill.apply_effect(self, battle_service, self.general_info, defenders)
+            skill_types.append(skill.skill_type)
+        return skill_types
+
+    def execute_skills(self, defenders, battle_service, turn):
+        for skill in self.skills:
+            skill.apply_effect(self, battle_service, self.general_info, defenders, turn)
+
+    def is_self_preparing_skill(self):
+        if self.general_info.get("self_skill")().skill_type == "prepare_active":
+            return True
+        return False
+
+    def receive_attack(self, attacker, battle_service):
+        if "insight" in self.buff:
+            for skill in self.skills:
+                if skill.name == "qianlizoudanqi":
+                    skill.counter_attack(self, attacker, battle_service)
 
     def _arms_type_to_property(self, general_adaptability):
         addition = 1
@@ -77,21 +149,20 @@ class GeneralService:
             addition *= 1
         return addition
 
-    def get_general_property(self, general_info, level):
+    def get_general_property(self, general_info):
         """
         get final property value
         :param general_info: general_info
-        :param level: 45 or 50 级
         :return:
         """
         # 计算将领最终武力基础值 + 等级 * 每级武力提升 + 满级时 50 点属性加成
-        power_value = general_info["basic_power"] + (level - 1) * general_info["power_up"]
+        power_value = general_info["basic_power"] + (self.user_level - 1) * general_info["power_up"]
 
-        intelligence_value = general_info["basic_intelligence"] + (level - 1) * general_info["intelligence_up"]
+        intelligence_value = general_info["basic_intelligence"] + (self.user_level - 1) * general_info["intelligence_up"]
 
-        speed_value = general_info["basic_speed"] + (level - 1) * general_info["speed_up"]
+        speed_value = general_info["basic_speed"] + (self.user_level - 1) * general_info["speed_up"]
 
-        defense_value = general_info["basic_defense"] + (level - 1) * general_info["defense_up"]
+        defense_value = general_info["basic_defense"] + (self.user_level - 1) * general_info["defense_up"]
 
         # ext = self._arms_type_to_property(general_info["troop_adaptability"])
         # final_power_value = (final_power_value + user_add_property.get("power", 0)) * ext
@@ -108,39 +179,34 @@ class GeneralService:
             "defense": defense_value,
         }
 
-    def overall_can_allocation_property(self, is_dynamic, is_classic, fusion_count, user_level):
+    def overall_can_allocation_property(self) -> int:
         """
-        :param is_dynamic: 是否是动态人物， 如果是会多 10 的属性分配
-        :param is_classic: 是否典藏，如果是会多 10 的属性分配
-        :param fusion_count: 进阶数，每进阶一个红度会减伤 2% 和增加对敌人伤害 2%，且多 10 点属性分配
-        :param user_level: 将领等级，每提升 10 级会有 10 点额属性分配
-        :return:
+        :return: overall can allocation user property
         """
         can_allocation_property = 0
-        if self.general_info["has_dynamic"] and is_dynamic:
+        if self.general_info["has_dynamic"] and self.is_dynamic:
             can_allocation_property += 10
 
-        if is_classic:
+        if self.is_classic:
             can_allocation_property += 10
 
-        if fusion_count < 0 or fusion_count > 5:
+        if self.fusion_count < 0 or self.fusion_count > 5:
             raise Exception("user advanced count should between 0 ~ 5")
-        can_allocation_property += fusion_count * 10
+        can_allocation_property += self.fusion_count * 10
 
-        can_allocation_property += (user_level // 10) * 10
+        can_allocation_property += (self.user_level // 10) * 10
 
         return can_allocation_property
 
-    def ready_fight_general_property(self,  user_add_property, choose_arm_type, user_level):
+    def ready_fight_general_property(self,  user_add_property, choose_arm_type):
         """
         获取准备战斗时将领的数据值，此数值计算为开始战斗前的最终属性数值。会影响
         :param user_add_property: 用户选择的加点，这个值从前端传入参数，是用户自己分配的加点（根据上面）
         :param choose_arm_type: 用户选择的兵种类型
-        :param user_level: 将领的等级
         :return:
         """
         # 只计算原始没有任何其他情况到对应等级的属性
-        origin_general_property = self.get_general_property(self.general_info, user_level)
+        origin_general_property = self.get_general_property(self.general_info)
         general_property = {
             "power": round(origin_general_property["power"] + user_add_property["power"], 2),
             "intelligence": round(origin_general_property["intelligence"] + user_add_property["intelligence"], 2),
@@ -155,9 +221,9 @@ class GeneralService:
 
 
 if __name__ == "__main__":
-    bs = GeneralService(guanyu)
-    can_alloc_property = bs.overall_can_allocation_property(True, False, 5, 45)
+    bs = GeneralService(guanyu, True, False, 5, 45)
+    can_alloc_property = bs.overall_can_allocation_property()
     general_values = bs.ready_fight_general_property(
-        {"power": 80, "intelligence": 0, "speed": 0, "defense": 20}, "shield", 45
+        {"power": 80, "intelligence": 0, "speed": 0, "defense": 20}, "shield"
     )
     print(general_values)
