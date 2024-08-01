@@ -36,20 +36,24 @@ class BattleService:
     def start_battle(self):
         self.prepare_battle()
         while self.round < 8 and self.team1[0].is_alive() and self.team2[0].is_alive():
-            self.execute_round(self.round)
+            self.execute_round()
             self.round += 1
         self.determine_winner()
 
     def execute_round(self):
         actions = []
         for general in self.team1.get_generals() + self.team2.get_generals():
-            actions.append((general, general.get_general_property(general.general_info, 45)["speed"]))
+            actions.append((general, general.get_general_property(general.general_info, 50)["speed"]))
         actions.sort(key=lambda x: x[1], reverse=True)
 
         for action in actions:
             general, speed = action
             if general.is_alive():
                 self.execute_action(general, self.round)
+
+        # ！！！这里逻辑不太对，更新人物 buff 状态持续时间 可能不应该放在这里
+        for general in self.team1.get_generals() + self.team2.get_generals():
+            general.update_statuses()
 
         # 重置反击触发状态
         for general in self.team1.get_generals() + self.team2.get_generals():
@@ -73,12 +77,12 @@ class BattleService:
         }
 
     def get_action_based_on_debuffs(self, general):
-        debuffs = general.debuff
-        is_stunned = "is_stunned" in debuffs
-        is_silenced = "is_silenced" in debuffs
-        is_disarmed = "is_disarmed" in debuffs
-        is_discommand = "is_discommand" in debuffs
-        is_taunted = "is_taunted" in debuffs
+        debuff = general.debuff
+        is_stunned = "is_stunned" in debuff
+        is_silenced = "is_silenced" in debuff
+        is_disarmed = "is_disarmed" in debuff
+        is_discommand = "is_discommand" in debuff
+        is_taunted = "is_taunted" in debuff
 
         # 震慑状态（技穷+缴械）：不能普通攻击和释放主动、突击技能；可以发动指挥、兵种和阵法
         if is_stunned or (is_silenced and is_disarmed):
@@ -160,28 +164,44 @@ class BattleService:
         damage = self.calculate_damage(attacker, defender, attack_type="physical")
         defender.take_damage(damage)
 
-    def calculate_damage(self, attacker, defender, attack_type):
-        # 这里可以调用之前的 DamageService 来计算伤害
+    def skill_attack(self, attacker, defenders, skill):
+        """
+        处理技能攻击，计算并应用伤害和效果
+        :param attacker: 攻击者
+        :param defenders: 防御者列表
+        :param skill: 技能实例
+        """
+        if skill.activation_type == "prepare":
+            # 如果技能是准备技能，准备阶段不会直接造成伤害
+            skill.prepare_effect(attacker, defenders, self)
+        else:
+            # 直接技能计算伤害
+            skill_coefficient = skill.effect["normal"]["attack_coefficient"]
+            for defender in defenders:
+                damage = self.calculate_damage(attacker, defender, "physical", skill_coefficient)
+                defender.take_damage(damage)
+
+    def calculate_damage(self, attacker, defender, attack_type, skill_coefficient=1):
         damage_service = DamageService()
         if attack_type == "physical":
-
             attacker_attr = attacker.get_general_property(attacker.general_info, 45)["power"]
             defender_attr = defender.get_general_property(defender.general_info, 45)["defense"]
-            return damage_service.calculate_damage(
-                50, 50, attacker_attr, defender_attr,
+            damage = damage_service.calculate_damage(
+                attacker.user_level, defender.user_level, attacker_attr, defender_attr,
                 attacker.default_take_troops, defender.default_take_troops,
-                10, 10, 10,
-                10, 100, False, 100
+                attacker.fusion_count, defender.fusion_count, 10,
+                10, 100, False, skill_coefficient
             )
         elif attack_type == "intelligent":
             attacker_attr = attacker.get_general_property(attacker.general_info, 45)["intelligence"]
             defender_attr = defender.get_general_property(defender.general_info, 45)["intelligence"]
-            return damage_service.calculate_damage(
+            damage = damage_service.calculate_damage(
                 50, 50, attacker_attr, defender_attr,
                 attacker.default_take_troops, defender.default_take_troops,
                 10, 10, 10,
-                10, 100, False, 100
+                10, 100, False, skill_coefficient
             )
+        return damage
 
     def determine_winner(self):
         if not self.team1.is_alive():

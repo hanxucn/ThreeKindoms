@@ -33,10 +33,21 @@ class GeneralService:
     # is_dynamic: 是否是动态人物， 如果是会多 10 的属性分配
     # is_classic: 是否典藏，如果是会多 10 的属性分配
     # fusion_count: 进阶数，每进阶一个红度会减伤 2% 和增加对敌人伤害 2%，且多 10 点属性分配
+    # is_leader: 人物是否为主将
     # user_level: 人物等级
     # equipped_skills: 人物装配的其他两个技能
     # user_add_property：可分配属性，需要先调用 overall_can_allocation_property() 方法计算，由前端提供值
-    def __init__(self, general_info, is_dynamic, is_classic, fusion_count, user_level=None, equipped_skills=None, user_add_property=None):
+    def __init__(
+            self,
+            general_info,
+            is_dynamic,
+            is_classic,
+            fusion_count,
+            is_leader=False,
+            user_level=None,
+            equipped_skills=None,
+            user_add_property=None
+    ):
         self.general_info = general_info
         self.skills = [self.general_info.self_skill].extend(equipped_skills)
         self.alive = True
@@ -46,6 +57,7 @@ class GeneralService:
         self.is_dynamic = is_dynamic
         self.is_classic = is_classic
         self.fusion_count = fusion_count
+        self.is_leader = is_leader
         self.user_level = user_level if user_level else 50
         self.can_allocation_property = self.overall_can_allocation_property()
         self.skill_types = self.get_skill_types()
@@ -111,8 +123,27 @@ class GeneralService:
     def add_buff(self, status, duration):
         self.buff[status] = duration
 
+    def remove_buff(self, status):
+        if status in self.buff:
+            del self.buff[status]
+
     def add_debuff(self, status, duration):
         self.debuff[status] = duration
+
+    def remove_debuff(self, status):
+        if status in self.debuff:
+            del self.debuff[status]
+
+    def update_statuses(self):
+        for status in list(self.buff.keys()):
+            self.buff[status] -= 1
+            if self.buff[status] <= 0:
+                self.remove_buff(status)
+
+        for status in list(self.debuff.keys()):
+            self.debuff[status] -= 1
+            if self.debuff[status] <= 0:
+                self.remove_debuff(status)
 
     def include_skill_type(self):
         skill_types = []

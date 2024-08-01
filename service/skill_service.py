@@ -3,6 +3,11 @@ import random
 from damage_service import DamageService
 
 
+"""
+buff: 增加伤害的数量 -> damage_bonus_<增伤百分数> 
+"""
+
+
 class Skill:
     name = None
 
@@ -103,33 +108,40 @@ class HealingSkill(ActiveSkill):
 
 
 class WeizhenhuaxiaSkill(ActiveSkill):
+    """
+    准备1回合，对敌军全体进行猛攻（伤害率146%），使其有50%概率进入缴械（无法进行普通攻击）、计穷（无法发动主动战法）状态，
+    独立判定，持续1回合，并使自己造成的兵刃伤害提升36%，持续2回合；自身为主将时，造成控制效果的概率提高65%
+    """
     name = "weizhenhuaxia"
 
     def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
         super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
-        self.trigger_list = self.simulate_trigger(self.effect['normal']['probability'])
+        self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def prepare_effect(self, attacker, defenders, battle_service):
+        if attacker.is_leader:
+            skill_effect = self.effect["leader"]
+        else:
+            skill_effect = self.effect["normal"]
         for defender in defenders:
-            if random.random() < self.effect['normal']['status_probability']:
-                defender.add_debuff("no_normal_attack", 1)  # 缴械
-            if random.random() < self.effect['normal']['status_probability']:
-                defender.add_debuff("no_skill_release", 1)  # 计穷
-            damage = battle_service.calculate_damage(
-                attacker, defender, "physical", self.effect['normal']['attack_coefficient']
-            )
-            defender.take_damage(damage)
-        attacker.add_buff("damage_bonus", self.effect['normal']['self_buff']['damage_bonus'])
+            if self.is_triggered(skill_effect.get("status_probability", 0)):
+                defender.add_debuff("is_disarmed", 1)  # 缴械
+            if self.is_triggered(skill_effect.get("status_probability", 0)):
+                defender.add_debuff("is_silenced", 1)  # 计穷
+        if "damage_bonus" in skill_effect.get("self_buff", {}):
+            damage_bonus = skill_effect["self_buff"]["damage_bonus"]
+            attacker.add_buff(f"damage_bonus_{damage_bonus}", 2)
 
     def apply_effect(self, battle_service, attacker, defenders, current_turn):
-        if self.trigger_list[turn]:
-            if self.activation_type == "prepare" and turn + 1 < len(self.trigger_list):
-                self.trigger_list[turn + 1] = True
-            else:
-                self.prepare_effect(attacker, defenders, battle_service)
+        if self.trigger_list[current_turn]:
+            battle_service.skill_attack(attacker, defenders, self)
 
 
 class QianlizoudanqiSkill(PassiveSkill):
+    """
+    战斗中，自身准备发动自带准备战法时，有70%几率（受武力影响）获得洞察状态（免疫所有控制效果）并提高50武力，持续2回合，
+    在此期间，自身受到普通攻击时，对攻击者进行一次反击（伤害率238%），每回合最多触发1次
+    """
     name = "qianlizoudanqi"
 
     def __init__(self, name, skill_type, quality, source, source_general, target, effect):
@@ -139,8 +151,8 @@ class QianlizoudanqiSkill(PassiveSkill):
     def check_and_apply_effect(self, battle_service, attacker, current_turn):
         if attacker.is_self_preparing_skill() and self.is_triggered_by_power(attacker):
             attacker.add_buff("insight", 2)
-            attacker.add_buff("power_boost", 2)
-            print(f"{attacker.general_info['name']}获得洞察状态并提高50武力，持续2回合。")
+            attacker.add_buff("power_up_50", 2)
+            print(f"获得洞察状态并提高50武力，持续2回合。")
 
     def is_triggered_by_power(self, attacker):
         power = attacker.get_general_property(attacker.general_info, 45)["power"]
@@ -150,16 +162,17 @@ class QianlizoudanqiSkill(PassiveSkill):
     def counter_attack(self, defender, attacker, battle_service):
         if not self.counter_triggered:
             damage_service = DamageService()
-            attack_attr = defender.get_general_property(defender.general_info, 45)["power"]
-            defend_attr = attacker.get_general_property(attacker.general_info, 45)["defense"]
+            power_up = 50 if attacker.buff.get("power_up_50") else 0
+            attack_attr = defender.get_general_property(defender.general_info)["power"] + power_up
+            defend_attr = attacker.get_general_property(attacker.general_info)["defense"]
             damage = damage_service.calculate_damage(
-                50, 50, attack_attr, defend_attr,
-                defender.default_take_troops, attacker.default_take_troops,
-                10, 10, 10, 10, 100, False, self.effect['counter_damage_rate']
+                attacker.user_level, defender.user_level, attack_attr, defend_attr,
+                attacker.default_take_troops, defender.default_take_troops,
+                attacker.fusion_count, defender.fusion_count, 10, 10, 100, False, self.effect["counter_damage_rate"]
             )
             attacker.take_damage(damage)
             self.counter_triggered = True
-            print(f"{defender.general_info['name']}反击{attacker.general_info['name']}，造成{damage}点伤害。")
+            print(f"执行反击，造成{damage}点伤害。")
 
     def reset_counter(self):
         self.counter_triggered = False
@@ -189,7 +202,7 @@ if __name__ == "__main__":
                 "status_probability": 0.5,
                 "self_buff": {
                     "type": "physical_damage",
-                    "damage_bonus": 1.36,
+                    "damage_bonus": 36,
                     "duration": 2,
                 }
             },
@@ -206,7 +219,7 @@ if __name__ == "__main__":
                 "status_probability": 0.65,
                 "self_buff": {
                     "type": "physical_damage",
-                    "damage_bonus": 1.36,
+                    "damage_bonus": 36,
                     "duration": 2,
                 }
             }
