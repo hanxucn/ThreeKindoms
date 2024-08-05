@@ -33,6 +33,7 @@ class GeneralService:
     # is_dynamic: 是否是动态人物， 如果是会多 10 的属性分配
     # is_classic: 是否典藏，如果是会多 10 的属性分配
     # fusion_count: 进阶数，每进阶一个红度会减伤 2% 和增加对敌人伤害 2%，且多 10 点属性分配
+    # take_troops_type: 初始带兵类型，有 4 种类型，分别为：盾兵 shield, 骑兵 cavalry, 弓箭 bow, 枪兵 pike
     # is_leader: 人物是否为主将
     # user_level: 人物等级
     # equipped_skills: 人物装配的其他两个技能
@@ -43,6 +44,7 @@ class GeneralService:
             is_dynamic,
             is_classic,
             fusion_count,
+            take_troops_type,
             is_leader=False,
             user_level=None,
             equipped_skills=None,
@@ -57,6 +59,7 @@ class GeneralService:
         self.is_dynamic = is_dynamic
         self.is_classic = is_classic
         self.fusion_count = fusion_count
+        self.take_troops_type = take_troops_type
         self.is_leader = is_leader
         self.user_level = user_level if user_level else 50
         self.can_allocation_property = self.overall_can_allocation_property()
@@ -189,7 +192,8 @@ class GeneralService:
         # 计算将领最终武力基础值 + 等级 * 每级武力提升 + 满级时 50 点属性加成
         power_value = general_info["basic_power"] + (self.user_level - 1) * general_info["power_up"]
 
-        intelligence_value = general_info["basic_intelligence"] + (self.user_level - 1) * general_info["intelligence_up"]
+        intelligence_value = general_info["basic_intelligence"] + (
+                self.user_level - 1) * general_info["intelligence_up"]
 
         speed_value = general_info["basic_speed"] + (self.user_level - 1) * general_info["speed_up"]
 

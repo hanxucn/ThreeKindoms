@@ -160,8 +160,8 @@ class BattleService:
         general.execute_skills(self.team2.get_generals(), self, turn)
         self.normal_attack(general, target)  # 普通攻击主将
 
-    def normal_attack(self, attacker, defender):
-        damage = self.calculate_damage(attacker, defender, attack_type="physical")
+    def normal_attack(self, attacker, defender, attack_type="physical", skill_coefficient=100):
+        damage = self.calculate_damage(attacker, defender, attack_type, skill_coefficient)
         defender.take_damage(damage)
 
     def skill_attack(self, attacker, defenders, skill):
@@ -181,26 +181,46 @@ class BattleService:
                 damage = self.calculate_damage(attacker, defender, "physical", skill_coefficient)
                 defender.take_damage(damage)
 
-    def calculate_damage(self, attacker, defender, attack_type, skill_coefficient=1):
+    def calculate_damage(self, attacker, defender, attack_type, skill_coefficient=100):
+        """
+        计算伤害
+        :param attacker: 攻击者
+        :param defender: 被攻击者
+        :param attack_type: 攻击类型：physical or intelligent
+        :param skill_coefficient: 技能伤害系数，默认 100%
+        :return:
+        """
         damage_service = DamageService()
         if attack_type == "physical":
             attacker_attr = attacker.get_general_property(attacker.general_info, 45)["power"]
             defender_attr = defender.get_general_property(defender.general_info, 45)["defense"]
-            damage = damage_service.calculate_damage(
-                attacker.user_level, defender.user_level, attacker_attr, defender_attr,
-                attacker.default_take_troops, defender.default_take_troops,
-                attacker.fusion_count, defender.fusion_count, 10,
-                10, 100, False, skill_coefficient
-            )
         elif attack_type == "intelligent":
             attacker_attr = attacker.get_general_property(attacker.general_info, 45)["intelligence"]
             defender_attr = defender.get_general_property(defender.general_info, 45)["intelligence"]
-            damage = damage_service.calculate_damage(
-                50, 50, attacker_attr, defender_attr,
-                attacker.default_take_troops, defender.default_take_troops,
-                10, 10, 10,
-                10, 100, False, skill_coefficient
-            )
+        else:
+            raise ValueError("Invalid attack type")
+
+        attacker_basic_bonus = 0
+        # 考虑攻击者的增益效果
+        for buff_name in attacker.buff:
+            if buff_name.startswith("damage_bonus_"):
+                attacker_basic_bonus += int(buff_name.split("_")[-1])
+            elif buff_name == "power_up_50":
+                if attack_type == "physical":
+                    attacker_attr += 50  # 增加攻击者的力量属性
+
+        defender_basic_bonus = 0
+        # 考虑防御者的增益效果
+        for buff_name in defender.buff:
+            if buff_name.startswith("damage_reduction_"):
+                defender_basic_bonus += int(buff_name.split("_")[-1])
+
+        damage = damage_service.calculate_damage(
+            attacker.user_level, defender.user_level, attacker_attr, defender_attr,
+            attacker.default_take_troops, defender.default_take_troops,
+            attacker.fusion_count, defender.fusion_count, attacker_basic_bonus,
+            defender_basic_bonus, 100, False, skill_coefficient
+        )
         return damage
 
     def determine_winner(self):

@@ -90,7 +90,9 @@ class PassiveSkill(Skill):
 
 
 class HealingSkill(ActiveSkill):
-    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type, healing_rate):
+    def __init__(
+            self, name, skill_type, quality, source, source_general, target, effect, activation_type, healing_rate
+    ):
         super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
         self.healing_rate = healing_rate
 

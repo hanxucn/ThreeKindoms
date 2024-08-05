@@ -5,6 +5,32 @@ from general_service import GeneralService
 
 
 class DamageService:
+
+    def _is_troop_restriction(self, attacker, defender) -> int:
+        """
+        判断兵种克制关系
+        :param attacker:
+        :param defender:
+        :return:
+            1 - 攻击方兵种克制防御方兵种
+            0 - 无克制关系
+            -1 - 防御方兵种克制攻击方兵种
+        """
+        restriction_relation = {
+            "pick": "cavalry",
+            "cavalry": "shield",
+            "shield": "bow",
+            "bow": "pick",
+        }
+        attacker_troop_type = attacker.general_info.take_troops_type
+        defender_troop_type = defender.general_info.take_troops_type
+        if restriction_relation.get(attacker_troop_type) == defender_troop_type:
+            return 1  # Attacker counters defender
+        elif restriction_relation.get(defender_troop_type) == attacker_troop_type:
+            return -1  # Defender counters attacker
+        else:
+            return 0  # No counter relationship
+
     def calculate_damage(
         self, attacker_level, defender_level, attacker_attr, defender_attr, attacker_troops,
         defender_troops, attacker_advanced_bonus, defender_advanced_bonus, attacker_basic_bonus,
