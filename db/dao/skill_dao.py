@@ -218,7 +218,7 @@ skills = [
                 "probability": 0.42,
                 "duration": 3,
                 "max_stacks": 4,
-                "damage_reduction": 40
+                "damage_reduction": -40
             },
             "main_general_buff": {
                 "type": "状态反弹",

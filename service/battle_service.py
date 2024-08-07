@@ -1,6 +1,7 @@
 import random
 
 from damage_service import DamageService
+from skill_service import QianlizoudanqiSkill
 
 
 class BattleService:
@@ -24,6 +25,7 @@ class BattleService:
         self.own_team_arm_type = own_team_arm_type
         self.enemy_team_arm_type = enemy_team_arm_type
         self.round = 0
+        self.normal_attack_records = {general.name: [] for general in self.team1.get_generals() + self.team2.get_generals()}
 
     def prepare_battle(self):
         # 准备阶段：计算每个将领的属性值
@@ -51,15 +53,14 @@ class BattleService:
             if general.is_alive():
                 self.execute_action(general, self.round)
 
-        # ！！！这里逻辑不太对，更新人物 buff 状态持续时间 可能不应该放在这里
-        for general in self.team1.get_generals() + self.team2.get_generals():
-            general.update_statuses()
-
         # 重置反击触发状态
         for general in self.team1.get_generals() + self.team2.get_generals():
             for skill in general.skills:
                 if skill.name == "qianlizoudanqi":
                     skill.reset_counter()
+
+        for general in self.team1.get_generals() + self.team2.get_generals():
+            general.update_statuses()
 
     def get_debuff_status(self, general):
         debuffs = general.debuff
@@ -111,18 +112,39 @@ class BattleService:
         # 正常情况下
         return "normal"
 
+    def select_targets(self, defenders, release_range=1):
+        """
+        选择攻击目标
+        :param defenders: 所有存活的敌方将领
+        :param release_range: 攻击范围，1 表示单个目标，2 表示两个目标，3 表示所有目标
+        :return: 选择的目标列表
+        """
+        if release_range == 1:
+            return [random.choice(defenders)]
+        elif release_range == 2:
+            return random.sample(defenders, min(2, len(defenders)))
+        elif release_range == 3:
+            return defenders
+        else:
+            raise ValueError("Invalid release_range value")
+
     def execute_action(self, general, turn):
         # 根据当前状态执行行动
         survive_defenders = [g for g in self.team2.get_generals() if g.is_alive()]
         if not survive_defenders:
             return
-        target = random.choice(survive_defenders)
 
+        normal_attack_target = self.select_targets(survive_defenders)
         action = self.get_action_based_on_debuffs(general)
 
         if action == "taunted":
             taunt_targets = [g for g in self.team2.get_generals() if "is_taunted" in g.buff]
-            target = taunt_targets[0]
+            target = taunt_targets[0] if taunt_targets else None
+            if target and target.is_alive():
+                for skill in defender.skills:
+                    if isinstance(skill, QianlizoudanqiSkill):
+                        if skill.is_get_normal_attack(defender, self, turn):
+                            skill.counter_attack(defender, general, self)
 
         if action == "stunned":
             if general.has_command_or_troop_skill():
@@ -149,7 +171,7 @@ class BattleService:
             if general.only_has_passive_skill() or general.only_has_command_skill():
                 return
             general.execute_skills(self.team2.get_generals(), self, turn)
-            self.normal_attack(general, target)
+            self.normal_attack(general, normal_attack_target)
             return
 
         for skill in general.skills:
@@ -158,11 +180,24 @@ class BattleService:
 
         # 正常情况下
         general.execute_skills(self.team2.get_generals(), self, turn)
-        self.normal_attack(general, target)  # 普通攻击主将
+        self.normal_attack(general, normal_attack_target)  # 普通攻击主将
+
+    def record_normal_attack(self, attacker, defender, turn):
+        if defender.name not in self.normal_attack_records:
+            self.normal_attack_records[defender.name] = []
+        self.normal_attack_records[defender.name].append((attacker.name, turn))
+
+    def was_attacked_in_current_round(self, general):
+        if general.name in self.normal_attack_records:
+            for record in self.normal_attack_records[general.name]:
+                if record[1] == self.round:
+                    return record[0]
+        return None
 
     def normal_attack(self, attacker, defender, attack_type="physical", skill_coefficient=100):
         damage = self.calculate_damage(attacker, defender, attack_type, skill_coefficient)
         defender.take_damage(damage)
+        self.record_normal_attack(attacker, defender, self.round)
 
     def skill_attack(self, attacker, defenders, skill):
         """
@@ -176,8 +211,14 @@ class BattleService:
             skill.prepare_effect(attacker, defenders, self)
         else:
             # 直接技能计算伤害
-            skill_coefficient = skill.effect["normal"]["attack_coefficient"]
-            for defender in defenders:
+            if attacker.is_leader:
+                skill_effect = self.effect.get("leader") if self.effect.get("leader") else self.effect.get("normal")
+            else:
+                skill_effect = self.effect.get("normal")
+            skill_coefficient = skill_effect.get("attack_coefficient", 100)
+            release_range = skill_effect.get("release_range", 1)
+            targets = self.select_targets(defenders, release_range)
+            for defender in targets:
                 damage = self.calculate_damage(attacker, defender, "physical", skill_coefficient)
                 defender.take_damage(damage)
 
@@ -192,11 +233,11 @@ class BattleService:
         """
         damage_service = DamageService()
         if attack_type == "physical":
-            attacker_attr = attacker.get_general_property(attacker.general_info, 45)["power"]
-            defender_attr = defender.get_general_property(defender.general_info, 45)["defense"]
+            attacker_attr = attacker.get_general_property(attacker.general_info)["power"]
+            defender_attr = defender.get_general_property(defender.general_info)["defense"]
         elif attack_type == "intelligent":
-            attacker_attr = attacker.get_general_property(attacker.general_info, 45)["intelligence"]
-            defender_attr = defender.get_general_property(defender.general_info, 45)["intelligence"]
+            attacker_attr = attacker.get_general_property(attacker.general_info)["intelligence"]
+            defender_attr = defender.get_general_property(defender.general_info)["intelligence"]
         else:
             raise ValueError("Invalid attack type")
 
@@ -215,11 +256,13 @@ class BattleService:
             if buff_name.startswith("damage_reduction_"):
                 defender_basic_bonus += int(buff_name.split("_")[-1])
 
+        troop_restriction = damage_service._is_troop_restriction(attacker, defender)
+
         damage = damage_service.calculate_damage(
             attacker.user_level, defender.user_level, attacker_attr, defender_attr,
             attacker.default_take_troops, defender.default_take_troops,
             attacker.fusion_count, defender.fusion_count, attacker_basic_bonus,
-            defender_basic_bonus, 100, False, skill_coefficient
+            defender_basic_bonus, 100, troop_restriction, skill_coefficient
         )
         return damage
 

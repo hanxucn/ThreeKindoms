@@ -77,8 +77,18 @@ class DamageService:
         raw_damage = base_damage_with_modifier + minimum_damage
 
         # 4. 结算伤害
+        # 4.1 士气降低伤害降低
         morale_modifier = (100 - morale) * 0.007
-        troop_modifier = 1 + (0.12 if troop_restriction else -0.12)
+
+        # 4.2 如果攻击者兵种克制防御者，则伤害增加， 如果攻击者兵种被防御者克制，则伤害减少，没有克制关系则不变
+        if troop_restriction == 1:
+            troop_restriction_val = 0.12
+        elif troop_restriction == -1:
+            troop_restriction_val = -0.12
+        else:
+            troop_restriction_val = 0
+        troop_modifier = 1 + troop_restriction_val
+
         final_damage = raw_damage * (1 - morale_modifier) * troop_modifier * (skill_coefficient / 100)
 
         # 5. 浮动伤害

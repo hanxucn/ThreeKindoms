@@ -165,8 +165,8 @@ class QianlizoudanqiSkill(PassiveSkill):
         if not self.counter_triggered:
             damage_service = DamageService()
             power_up = 50 if attacker.buff.get("power_up_50") else 0
-            attack_attr = defender.get_general_property(defender.general_info)["power"] + power_up
-            defend_attr = attacker.get_general_property(attacker.general_info)["defense"]
+            attack_attr = attacker.get_general_property(defender.general_info)["power"] + power_up
+            defend_attr = defender.get_general_property(attacker.general_info)["defense"]
             damage = damage_service.calculate_damage(
                 attacker.user_level, defender.user_level, attack_attr, defend_attr,
                 attacker.default_take_troops, defender.default_take_troops,
@@ -175,6 +175,17 @@ class QianlizoudanqiSkill(PassiveSkill):
             attacker.take_damage(damage)
             self.counter_triggered = True
             print(f"执行反击，造成{damage}点伤害。")
+
+    def is_get_normal_attack(self, attacker, battle_service, current_turn):
+        normal_attack_records = battle_service.normal_attack_records.get(attacker.name)
+        if normal_attack_records and current_turn in normal_attack_records:
+            return True
+        return False
+
+    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+        attack_source = battle_service.was_attacked_in_current_round(attacker)
+        if attack_source:
+            self.counter_attack(attacker, attack_source, battle_service)
 
     def reset_counter(self):
         self.counter_triggered = False
@@ -188,17 +199,17 @@ if __name__ == "__main__":
         quality="S",
         source="自带战法",
         source_general="关羽",
-        target="group",
+        target="enemy_group",
         effect={
             # normal 表示正常情况下的技能描述； leader 表示如果装备此战法的为主将有不同的技能描述
             "normal": {
                 "probability": 0.35,
-                "attack_coefficient": 1.46,  # 此为 DamageService 里的 skill_coefficient
-                "release_range": "all",
+                "attack_coefficient": 146,  # 此为 DamageService 里的 skill_coefficient
+                "release_range": 3,
                 "target": "enemy",
                 "to_enemy_buff": {
                     "status": ["no_normal_attack", "no_skill_release"],
-                    "release_range": "all",
+                    "release_range": 3,
                     "duration": 1,
                 },
                 "status_probability": 0.5,
@@ -210,12 +221,12 @@ if __name__ == "__main__":
             },
             "leader": {
                 "probability": 0.35,
-                "attack_coefficient": 1.46,
-                "release_range": "all",
+                "attack_coefficient": 146,
+                "release_range": 3,
                 "target": "enemy",
                 "to_enemy_buff": {
                     "status": ["no_normal_attack", "no_skill_release"],
-                    "release_range": "all",
+                    "release_range": 3,
                     "duration": 1,
                 },
                 "status_probability": 0.65,
@@ -235,13 +246,13 @@ if __name__ == "__main__":
         quality="S",
         source="自带战法",
         source_general="孙坚",
-        target="group",
+        target="enemy_group",
         effect={
             "normal": {
                 "probability": 0.5,
                 "release_range": "2",
                 "target": "enemy",
-                "attack_coefficient": 1.26,
+                "attack_coefficient": 126,
                 "status": ["taunt"],
                 "status_duration": 2
             },
@@ -249,16 +260,31 @@ if __name__ == "__main__":
                 "probability": 0.5,
                 "release_range": "2",
                 "target": "enemy",
-                "attack_coefficient": 1.26,
+                "attack_coefficient": 126,
                 "status": ["taunt"],
                 "status_duration": 2,
                 "self_buff": {
-                    "injury_tolerance": 0.8
+                    "damage_reduction": -20
                 }
             }
 
         },
         activation_type="instant",
+    )
+
+    skill_qianlizoudanqi = PassiveSkill(
+        name="qianlizoudanqi",
+        skill_type="passive",
+        quality="S",
+        source="events",
+        source_general=None,
+        target="self",
+        effect={
+            "normal": {
+
+            }
+        }
+
     )
 
     skill_shimianmaifu = ActiveSkill(
@@ -269,12 +295,15 @@ if __name__ == "__main__":
         source_general="程昱",
         target="group",
         effect={
-            "probability": 0.35,
-            "coefficient": 74,
-            # 禁疗状态和叛逃状态
-            "status": ["no_healing", "defection"],
-            "status_duration": 2,
-            "attack_coefficient": 0.96
+            "normal": {
+                "probability": 0.35,
+                "coefficient": 74,
+                "release_range": "2",
+                # 禁疗状态和叛逃状态
+                "status": ["no_healing", "defection"],
+                "status_duration": 2,
+                "attack_coefficient": 96,
+            }
         },
         activation_type="prepare",
     )
@@ -298,7 +327,7 @@ if __name__ == "__main__":
             "initial_effect": {
                 "status": "poison",
                 "duration": 3,
-                "attack_coefficient": 0.8
+                "attack_coefficient": 880
             }
         },
     )
