@@ -71,6 +71,7 @@ class GeneralService:
             "defense": 0
         }
         self.user_add_property = user_add_property
+        self.counter_status_list = []
 
     def is_alive(self):
         return self.alive and self.general_info["take_troops"] > 0

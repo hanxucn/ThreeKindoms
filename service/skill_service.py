@@ -118,7 +118,20 @@ class WeizhenhuaxiaSkill(ActiveSkill):
 
     def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
         super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
-        self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
+        self.trigger_list = self.simulate_trigger(self.effect["leader"]["probability"])
+        self.counter_status_list = self._counter_status_list()
+        source_general.counter_status_list = self.counter_status_list
+
+    def _counter_status_list(self):
+        counter_status_list = [False * 8]
+        if not self.trigger_list:
+            self.trigger_list = self.simulate_trigger(self.effect["leader"]["probability"])
+        for turn, trigger_status in enumerate(self.trigger_list):
+            if turn == 0:
+                continue
+            if trigger_status:
+                counter_status_list[turn-1] = True
+        return counter_status_list
 
     def prepare_effect(self, attacker, defenders, battle_service):
         if attacker.is_leader:
@@ -136,7 +149,7 @@ class WeizhenhuaxiaSkill(ActiveSkill):
 
     def apply_effect(self, battle_service, attacker, defenders, current_turn):
         if self.trigger_list[current_turn]:
-            battle_service.skill_attack(attacker, defenders, self)
+            battle_service.skill_attack(attacker, defenders, self, targets=defenders)
 
 
 class QianlizoudanqiSkill(PassiveSkill):
@@ -161,20 +174,22 @@ class QianlizoudanqiSkill(PassiveSkill):
         probability = min(1, 0.7 + power / 1000)  # 受武力影响的触发概率
         return random.random() < probability
 
-    def counter_attack(self, defender, attacker, battle_service):
+    def counter_attack(self, defender, attacker):
+        attack_attr = None
+        defend_attr = None
         if not self.counter_triggered:
-            damage_service = DamageService()
             power_up = 50 if attacker.buff.get("power_up_50") else 0
             attack_attr = attacker.get_general_property(defender.general_info)["power"] + power_up
             defend_attr = defender.get_general_property(attacker.general_info)["defense"]
-            damage = damage_service.calculate_damage(
-                attacker.user_level, defender.user_level, attack_attr, defend_attr,
-                attacker.default_take_troops, defender.default_take_troops,
-                attacker.fusion_count, defender.fusion_count, 10, 10, 100, False, self.effect["counter_damage_rate"]
-            )
-            attacker.take_damage(damage)
+            # damage = damage_service.calculate_damage(
+            #     attacker.user_level, defender.user_level, attack_attr, defend_attr,
+            #     attacker.default_take_troops, defender.default_take_troops,
+            #     attacker.fusion_count, defender.fusion_count, 10, 10, 100, False, self.effect["counter_damage_rate"]
+            # )
+            # attacker.take_damage(damage)
             self.counter_triggered = True
-            print(f"执行反击，造成{damage}点伤害。")
+            print(f"触发反击效果。")
+        return attack_attr, defend_attr
 
     def is_get_normal_attack(self, attacker, battle_service, current_turn):
         normal_attack_records = battle_service.normal_attack_records.get(attacker.name)
@@ -183,9 +198,24 @@ class QianlizoudanqiSkill(PassiveSkill):
         return False
 
     def apply_effect(self, battle_service, attacker, defenders, current_turn):
-        attack_source = battle_service.was_attacked_in_current_round(attacker)
-        if attack_source:
-            self.counter_attack(attacker, attack_source, battle_service)
+        if attacker.counter_status_list and current_turn < len(attacker.counter_status_list):
+            if (
+                    attacker.counter_status_list[current_turn] and
+                    self.is_get_normal_attack(attacker, battle_service, current_turn)
+            ):
+                self.check_and_apply_effect(battle_service, attacker, current_turn)
+                attack_source = battle_service.was_attacked_in_current_round(attacker)
+                if attack_source:
+                    attack_attr, defend_attr = self.counter_attack(attacker, attack_source)
+                    battle_service.skill_attack(
+                        attacker,
+                        attack_source,
+                        self,
+                        targets=attack_source,
+                        attacker_attr=attack_attr,
+                        defender_attr=defend_attr,
+                    )
+                    self.reset_counter()
 
     def reset_counter(self):
         self.counter_triggered = False
@@ -281,7 +311,7 @@ if __name__ == "__main__":
         target="self",
         effect={
             "normal": {
-
+                "attack_coefficient": 238
             }
         }
 

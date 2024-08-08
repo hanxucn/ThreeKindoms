@@ -25,6 +25,7 @@ class BattleService:
         self.own_team_arm_type = own_team_arm_type
         self.enemy_team_arm_type = enemy_team_arm_type
         self.round = 0
+        # 记录了被攻击的记录 {"被攻击将领": [("普通攻击来源将领", 记录的回合)]}
         self.normal_attack_records = {general.name: [] for general in self.team1.get_generals() + self.team2.get_generals()}
 
     def prepare_battle(self):
@@ -52,12 +53,6 @@ class BattleService:
             general, speed = action
             if general.is_alive():
                 self.execute_action(general, self.round)
-
-        # 重置反击触发状态
-        for general in self.team1.get_generals() + self.team2.get_generals():
-            for skill in general.skills:
-                if skill.name == "qianlizoudanqi":
-                    skill.reset_counter()
 
         for general in self.team1.get_generals() + self.team2.get_generals():
             general.update_statuses()
@@ -139,12 +134,7 @@ class BattleService:
 
         if action == "taunted":
             taunt_targets = [g for g in self.team2.get_generals() if "is_taunted" in g.buff]
-            target = taunt_targets[0] if taunt_targets else None
-            if target and target.is_alive():
-                for skill in defender.skills:
-                    if isinstance(skill, QianlizoudanqiSkill):
-                        if skill.is_get_normal_attack(defender, self, turn):
-                            skill.counter_attack(defender, general, self)
+            normal_attack_target = taunt_targets[0] if taunt_targets else None
 
         if action == "stunned":
             if general.has_command_or_troop_skill():
@@ -174,10 +164,6 @@ class BattleService:
             self.normal_attack(general, normal_attack_target)
             return
 
-        for skill in general.skills:
-            if skill.name == "qianlizoudanqi":
-                skill.check_and_apply_effect(self, general, turn)
-
         # 正常情况下
         general.execute_skills(self.team2.get_generals(), self, turn)
         self.normal_attack(general, normal_attack_target)  # 普通攻击主将
@@ -199,56 +185,62 @@ class BattleService:
         defender.take_damage(damage)
         self.record_normal_attack(attacker, defender, self.round)
 
-    def skill_attack(self, attacker, defenders, skill):
+    def skill_attack(self, attacker, defenders, skill, targets=None, attacker_attr=None, defender_attr=None):
         """
         处理技能攻击，计算并应用伤害和效果
         :param attacker: 攻击者
         :param defenders: 防御者列表
         :param skill: 技能实例
+        :param targets: 目标对象，如果为空则随机选择
+        :param attacker_attr: 攻击者属性，如果为空则使用普通的攻击者属性
+        :param defender_attr: 防御者属性，如果为空则使用普通的防御者属性
         """
-        if skill.activation_type == "prepare":
-            # 如果技能是准备技能，准备阶段不会直接造成伤害
-            skill.prepare_effect(attacker, defenders, self)
-        else:
-            # 直接技能计算伤害
-            if attacker.is_leader:
-                skill_effect = self.effect.get("leader") if self.effect.get("leader") else self.effect.get("normal")
-            else:
-                skill_effect = self.effect.get("normal")
-            skill_coefficient = skill_effect.get("attack_coefficient", 100)
-            release_range = skill_effect.get("release_range", 1)
-            targets = self.select_targets(defenders, release_range)
-            for defender in targets:
-                damage = self.calculate_damage(attacker, defender, "physical", skill_coefficient)
-                defender.take_damage(damage)
 
-    def calculate_damage(self, attacker, defender, attack_type, skill_coefficient=100):
+        # 直接技能计算伤害
+        if attacker.is_leader:
+            skill_effect = attacker.effect.get("leader") if attacker.effect.get("leader") else attacker.effect.get("normal")
+        else:
+            skill_effect = attacker.effect.get("normal")
+        skill_coefficient = skill_effect.get("attack_coefficient", 100)
+        release_range = skill_effect.get("release_range", 1)
+        if not targets:
+            targets = self.select_targets(defenders, release_range)
+        for defender in targets:
+            damage = self.calculate_damage(attacker, defender, skill.skill_type, skill_coefficient)
+            defender.take_damage(damage)
+
+    def calculate_damage(
+            self, attacker, defender, attack_type, skill_coefficient=100, attacker_attr=None, defender_attr=None
+    ):
         """
         计算伤害
         :param attacker: 攻击者
         :param defender: 被攻击者
         :param attack_type: 攻击类型：physical or intelligent
         :param skill_coefficient: 技能伤害系数，默认 100%
+        :param attacker_attr: 攻击者属性，如果为空则使用普通的攻击者属性
+        :param defender_attr: 防御者属性，如果为空则使用普通的防御者属性
         :return:
         """
         damage_service = DamageService()
         if attack_type == "physical":
-            attacker_attr = attacker.get_general_property(attacker.general_info)["power"]
-            defender_attr = defender.get_general_property(defender.general_info)["defense"]
+            attacker_key = "power"
+            defender_key = "defense"
         elif attack_type == "intelligent":
-            attacker_attr = attacker.get_general_property(attacker.general_info)["intelligence"]
-            defender_attr = defender.get_general_property(defender.general_info)["intelligence"]
+            attacker_key = defender_key = "intelligence"
         else:
             raise ValueError("Invalid attack type")
+
+        if not attacker_attr:
+            attacker_attr = attacker.get_general_property(attacker.general_info)[attacker_key]
+        if not defender_attr:
+            defender_attr = defender.get_general_property(defender.general_info)[defender_key]
 
         attacker_basic_bonus = 0
         # 考虑攻击者的增益效果
         for buff_name in attacker.buff:
             if buff_name.startswith("damage_bonus_"):
                 attacker_basic_bonus += int(buff_name.split("_")[-1])
-            elif buff_name == "power_up_50":
-                if attack_type == "physical":
-                    attacker_attr += 50  # 增加攻击者的力量属性
 
         defender_basic_bonus = 0
         # 考虑防御者的增益效果
