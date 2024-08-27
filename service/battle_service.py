@@ -64,12 +64,14 @@ class BattleService:
         is_disarmed = "is_disarmed" in debuffs
         is_discommand = "is_discommand" in debuffs
         is_taunted = "is_taunted" in debuffs
+        is_weakness = "is_weakness" in debuffs
         return {
             "is_stunned": is_stunned,
             "is_silenced": is_silenced,
             "is_disarmed": is_disarmed,
             "is_discommand": is_discommand,
             "is_taunted": is_taunted,
+            "is_weakness": is_weakness,
         }
 
     def get_action_based_on_debuffs(self, general):
@@ -196,6 +198,9 @@ class BattleService:
         :param defender_attr: 防御者属性，如果为空则使用普通的防御者属性
         """
 
+        if "is_weakness" in attacker.debuff:
+            return 0
+
         # 直接技能计算伤害
         if attacker.is_leader:
             skill_effect = attacker.effect.get("leader") if attacker.effect.get("leader") else attacker.effect.get("normal")
@@ -206,11 +211,11 @@ class BattleService:
         if not targets:
             targets = self.select_targets(defenders, release_range)
         for defender in targets:
-            damage = self.calculate_damage(attacker, defender, skill.skill_type, skill_coefficient)
+            damage = self.calculate_damage(attacker, defender, skill.attack_type, skill_coefficient)
             defender.take_damage(damage)
 
     def calculate_damage(
-            self, attacker, defender, attack_type, skill_coefficient=100, attacker_attr=None, defender_attr=None
+        self, attacker, defender, attack_type, skill_coefficient=100, attacker_attr=None, defender_attr=None
     ):
         """
         计算伤害
@@ -235,6 +240,9 @@ class BattleService:
             attacker_attr = attacker.get_general_property(attacker.general_info)[attacker_key]
         if not defender_attr:
             defender_attr = defender.get_general_property(defender.general_info)[defender_key]
+
+        if "ignore_defense" in attacker.buff:
+            defender_attr = 0
 
         attacker_basic_bonus = 0
         # 考虑攻击者的增益效果

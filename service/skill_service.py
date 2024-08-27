@@ -11,9 +11,10 @@ buff: 增加伤害的数量 -> damage_bonus_<增伤百分数>
 class Skill:
     name = None
 
-    def __init__(self, name, skill_type, quality, source, source_general, target, effect):
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
         self.name = name
         self.skill_type = skill_type
+        self.attack_type = attack_type
         self.quality = quality
         self.source = source
         self.source_general = source_general
@@ -41,10 +42,11 @@ class Skill:
 
 
 class ActiveSkill(Skill):
-    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type="prepare"):
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type="prepare"):
         super().__init__(name, skill_type, quality, source, source_general, target, effect)
         self.activation_type = activation_type
         self.skill_type = "active"
+        self.attack_type = attack_type
         self.trigger_list = self.simulate_trigger(self.effect.get("probability", 1))
 
     def active_skill_type(self, battle_service, attacker, defenders):
@@ -84,9 +86,10 @@ class ActiveSkill(Skill):
 
 
 class PassiveSkill(Skill):
-    def __init__(self, name, skill_type, quality, source, source_general, target, effect):
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
         super().__init__(name, skill_type, quality, source, source_general, target, effect)
         self.skill_type = "passive"
+        self.attack_type = attack_type
 
 
 class HealingSkill(ActiveSkill):
@@ -150,6 +153,32 @@ class WeizhenhuaxiaSkill(ActiveSkill):
     def apply_effect(self, battle_service, attacker, defenders, current_turn):
         if self.trigger_list[current_turn]:
             battle_service.skill_attack(attacker, defenders, self, targets=defenders)
+
+
+class WeiMouMiKangSkill(ActiveSkill):
+    """
+    准备1回合，对敌军群体（2人）施加虚弱（无法造成伤害）状态，持续2回合；
+    如果目标已处于虚弱状态则使其陷入叛逃状态，每回合持续造成伤害（伤害率158%，受武力或智力最高一项影响，无视防御），持续2回合
+    """
+    name = "weimoumikang"
+
+    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
+        super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
+        self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
+
+    def prepare_effect(self, attacker, defenders, battle_service):
+        skill_effect = self.effect["normal"]
+        for defender in defenders:
+            if self.is_triggered(skill_effect.get("probability", 0)):
+                if "is_weakness" in defender.debuff:
+                    attacker.add_buff("ignore_defense", 1)
+                else:
+                    defender.add_debuff("is_weakness", 2)  # 虚弱
+
+    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+        if self.trigger_list[current_turn]:
+            battle_service.skill_attack(attacker, defenders, self, targets=defenders)
+            attacker.remove_buff("ignore_defense")
 
 
 class QianlizoudanqiSkill(PassiveSkill):
@@ -226,8 +255,9 @@ if __name__ == "__main__":
     skill_weizhenhuaxia = ActiveSkill(
         name="威震华夏",
         skill_type="prepare_active",
+        attack_type="physical",
         quality="S",
-        source="自带战法",
+        source="self",
         source_general="关羽",
         target="enemy_group",
         effect={
@@ -238,7 +268,7 @@ if __name__ == "__main__":
                 "release_range": 3,
                 "target": "enemy",
                 "to_enemy_buff": {
-                    "status": ["no_normal_attack", "no_skill_release"],
+                    "status": ["is_disarmed", "is_silenced"],
                     "release_range": 3,
                     "duration": 1,
                 },
@@ -255,7 +285,7 @@ if __name__ == "__main__":
                 "release_range": 3,
                 "target": "enemy",
                 "to_enemy_buff": {
-                    "status": ["no_normal_attack", "no_skill_release"],
+                    "status": ["is_disarmed", "is_silenced"],
                     "release_range": 3,
                     "duration": 1,
                 },
@@ -270,9 +300,34 @@ if __name__ == "__main__":
         activation_type="prepare",
     )
 
+    skill_weimoumikang = ActiveSkill(
+        name="weimoumikang",
+        skill_type="prepare_active",
+        attack_type="physical",
+        quality="S",
+        source="inherited",
+        target="enemy_group",
+        effect={
+            # normal 表示正常情况下的技能描述； leader 表示如果装备此战法的为主将有不同的技能描述
+            "normal": {
+                "probability": 0.4,
+                "attack_coefficient": 158,  # 此为 DamageService 里的 skill_coefficient
+                "release_range": 2,
+                "target": "enemy",
+                "to_enemy_buff": {
+                    "status": ["is_weakness"],
+                    "release_range": 2,
+                    "duration": 2,
+                },
+                "status_probability": 1,
+            }
+        },
+    )
+
     skill_jiangdongmenghu = ActiveSkill(
         name="江东猛虎",
         skill_type="instant_active",
+        attack_type="physical",
         quality="S",
         source="自带战法",
         source_general="孙坚",
@@ -305,6 +360,7 @@ if __name__ == "__main__":
     skill_qianlizoudanqi = PassiveSkill(
         name="qianlizoudanqi",
         skill_type="passive",
+        attack_type="physical",
         quality="S",
         source="events",
         source_general=None,
@@ -320,6 +376,7 @@ if __name__ == "__main__":
     skill_shimianmaifu = ActiveSkill(
         name="十面埋伏",
         skill_type="prepare_active",
+        attack_type="intelligence",
         quality="S",
         source="自带战法",
         source_general="程昱",
@@ -341,6 +398,7 @@ if __name__ == "__main__":
     skill_wudangfeijun = Skill(
         name="无当飞军",
         skill_type="troop",
+        attack_type="intelligence",
         quality="S",
         source="自带战法",
         source_general="王平",
@@ -357,7 +415,7 @@ if __name__ == "__main__":
             "initial_effect": {
                 "status": "poison",
                 "duration": 3,
-                "attack_coefficient": 880
+                "attack_coefficient": 88
             }
         },
     )
