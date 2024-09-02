@@ -152,6 +152,8 @@ class WeizhenhuaxiaSkill(ActiveSkill):
 
     def apply_effect(self, battle_service, attacker, defenders, current_turn):
         if self.trigger_list[current_turn]:
+            self.prepare_effect(attacker, defenders, battle_service)
+
             battle_service.skill_attack(attacker, defenders, self, targets=defenders)
 
 
@@ -177,8 +179,35 @@ class WeiMouMiKangSkill(ActiveSkill):
 
     def apply_effect(self, battle_service, attacker, defenders, current_turn):
         if self.trigger_list[current_turn]:
+            self.prepare_effect(attacker, defenders, battle_service)
+
             battle_service.skill_attack(attacker, defenders, self, targets=defenders)
             attacker.remove_buff("ignore_defense")
+
+
+class HengsaoqianjunSkill(ActiveSkill):
+    """
+    对敌军全体造成100%兵刃伤害，若目标已处于缴械或计穷状态则有30%概率使目标处于震慑状态（无法行动），持续1回合
+    """
+    name = "hengsaoqianjun"
+
+    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
+        super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
+        self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
+
+    def instant_effect(self, attacker, defenders, battle_service):
+        skill_effect = self.effect["normal"]
+        for defender in defenders:
+            if self.is_triggered(skill_effect.get("probability", 0)):
+                if "is_disarmed" in defender.debuff or "is_silenced" in defender.debuff:
+                    if self.is_triggered(0.3):
+                        defender.add_debuff("is_taunted", 1)  # 震慑
+
+    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+        if self.trigger_list[current_turn]:
+            self.instant_effect(attacker, defenders, battle_service)
+
+            battle_service.skill_attack(attacker, defenders, self, targets=defenders)
 
 
 class QianlizoudanqiSkill(PassiveSkill):
@@ -306,6 +335,7 @@ if __name__ == "__main__":
         attack_type="physical",
         quality="S",
         source="inherited",
+        source_general=None,
         target="enemy_group",
         effect={
             # normal 表示正常情况下的技能描述； leader 表示如果装备此战法的为主将有不同的技能描述
@@ -322,6 +352,33 @@ if __name__ == "__main__":
                 "status_probability": 1,
             }
         },
+        activation_type="prepare",
+    )
+
+    skill_hengsaoqianjun = ActiveSkill(
+        name="横扫千军",
+        skill_type="instant_active",
+        attack_type="physical",
+        quality="S",
+        source="inherited",
+        source_general=None,
+        target="enemy_group",
+        effect={
+            "normal": {
+                "probability": 0.4,
+                "attack_coefficient": 100,  # 此为 DamageService 里的 skill_coefficient
+                "release_range": 3,
+                "target": "enemy",
+                "to_enemy_buff": {
+                    "prerequisite ": ["is_disarmed", "is_silenced"],
+                    "status": ["is_taunted"],
+                    "release_range": 3,
+                    "duration": 1,
+                },
+                "status_probability": 0.3,
+            }
+        },
+        activation_type="instant",
     )
 
     skill_jiangdongmenghu = ActiveSkill(
