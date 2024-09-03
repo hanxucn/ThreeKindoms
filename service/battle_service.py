@@ -203,9 +203,9 @@ class BattleService:
 
         # 直接技能计算伤害
         if attacker.is_leader:
-            skill_effect = attacker.effect.get("leader") if attacker.effect.get("leader") else attacker.effect.get("normal")
+            skill_effect = skill.effect.get("leader") if attacker.effect.get("leader") else attacker.effect.get("normal")
         else:
-            skill_effect = attacker.effect.get("normal")
+            skill_effect = skill.effect.get("normal")
         skill_coefficient = skill_effect.get("attack_coefficient", 100)
         release_range = skill_effect.get("release_range", 1)
         if not targets:

@@ -43,7 +43,7 @@ class Skill:
 
 class ActiveSkill(Skill):
     def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type="prepare"):
-        super().__init__(name, skill_type, quality, source, source_general, target, effect)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
         self.activation_type = activation_type
         self.skill_type = "active"
         self.attack_type = attack_type
@@ -87,7 +87,7 @@ class ActiveSkill(Skill):
 
 class PassiveSkill(Skill):
     def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
-        super().__init__(name, skill_type, quality, source, source_general, target, effect)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
         self.skill_type = "passive"
         self.attack_type = attack_type
 
@@ -217,8 +217,8 @@ class QianlizoudanqiSkill(PassiveSkill):
     """
     name = "qianlizoudanqi"
 
-    def __init__(self, name, skill_type, quality, source, source_general, target, effect):
-        super().__init__(name, skill_type, quality, source, source_general, target, effect)
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
         self.counter_triggered = False
 
     def check_and_apply_effect(self, battle_service, attacker, current_turn):
@@ -279,6 +279,27 @@ class QianlizoudanqiSkill(PassiveSkill):
         self.counter_triggered = False
 
 
+class YanrenpaoxiaoSkill(PassiveSkill):
+    """
+    战斗第2、4回合，对敌军全体造成兵刃攻击（伤害率104%）；若目标处于缴械状态或计穷状态，则额外使目标统率降低50%，持续2回合，
+    自身为主将时，第6回合对敌军全体发动兵刃攻击（伤害率88%）
+    """
+    name = "qianlizoudanqi"
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+
+    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+        trigger_list = [False] * 8
+        trigger_list[1] = trigger_list[3] = True
+        if attacker.is_leader:
+            trigger_list[5] = True
+        if trigger_list[current_turn]:
+            if current_turn == 5:
+                self.effect["leader"]["attack_coefficient"] = 88
+            battle_service.skill_attack(attacker, defenders, self, targets=defenders)
+
+
 if __name__ == "__main__":
     # 创建技能
     skill_weizhenhuaxia = ActiveSkill(
@@ -286,7 +307,7 @@ if __name__ == "__main__":
         skill_type="prepare_active",
         attack_type="physical",
         quality="S",
-        source="self",
+        source="self_implemented",
         source_general="关羽",
         target="enemy_group",
         effect={
@@ -386,7 +407,7 @@ if __name__ == "__main__":
         skill_type="instant_active",
         attack_type="physical",
         quality="S",
-        source="自带战法",
+        source="self_implemented",
         source_general="孙坚",
         target="enemy_group",
         effect={
@@ -430,6 +451,42 @@ if __name__ == "__main__":
 
     )
 
+    skill_yanrenpaoxiao = PassiveSkill(
+        name="yanrenpaoxiao",
+        skill_type="passive",
+        attack_type="physical",
+        quality="S",
+        source="self_implemented",
+        source_general="zhangfei",
+        target="enemy_group",
+        effect={
+            "normal": {
+                "attack_coefficient": 104,
+                "release_range": 3,
+                "target": "enemy",
+                "release_turn_with_attack_coefficient": {2: 104, 4: 104},
+                "to_enemy_buff": {
+                    "status": ["defense_reduction"],
+                    "duration": 2,
+                    "value": -50,
+                    "prerequisite": ["is_disarmed", "is_silenced"],
+                },
+            },
+            "leader": {
+                "attack_coefficient": 104,
+                "release_range": 3,
+                "target": "enemy",
+                "release_turn_with_attack_coefficient": {2: 104, 4: 104, 6: 88},
+                "to_enemy_buff": {
+                    "status": ["defense_reduction"],
+                    "duration": 2,
+                    "value": -50,
+                    "prerequisite": ["is_disarmed", "is_silenced"],
+                },
+            },
+        },
+    )
+
     skill_shimianmaifu = ActiveSkill(
         name="十面埋伏",
         skill_type="prepare_active",
@@ -437,7 +494,7 @@ if __name__ == "__main__":
         quality="S",
         source="自带战法",
         source_general="程昱",
-        target="group",
+        target="enemy_group",
         effect={
             "normal": {
                 "probability": 0.35,
