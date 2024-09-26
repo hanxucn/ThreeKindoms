@@ -37,7 +37,7 @@ class Skill:
         """Simulate skill trigger status for each turn"""
         return [self.is_triggered(probability) for _ in range(turns)]
 
-    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         raise NotImplementedError("Subclasses should implement this method")
 
 
@@ -70,12 +70,12 @@ class ActiveSkill(Skill):
                         trigger_list[turn + 1] = True
         return trigger_list
 
-    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if self.trigger_list[current_turn]:
             if self.activation_type == "prepare":
-                self.prepare_effect(attacker, defenders, battle_service)
+                self.prepare_effect(attackers[0], defenders, battle_service)
             elif self.activation_type == "instant":
-                self.instant_effect(attacker, defenders, battle_service)
+                self.instant_effect(attackers[0], defenders, battle_service)
 
     def prepare_effect(self, attacker, defenders, battle_service):
         pass
@@ -90,6 +90,25 @@ class PassiveSkill(Skill):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
         self.skill_type = "passive"
         self.attack_type = attack_type
+
+
+class FormationSkill(Skill):
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, duration):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        self.duration = duration  # 阵法的持续回合数，箕形阵持续 3 回合，锋矢阵持续 8 回合
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        # 阵法在战斗前指定回合触发
+        if current_turn <= self.duration:
+            self.effect.apply(battle_service, attackers, defenders, current_turn)
+
+
+class CommandSkill(Skill):
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        return super().apply_effect(skill_own_attacker, attackers, defenders, battle_service, current_turn)
 
 
 class HealingSkill(ActiveSkill):
@@ -110,6 +129,26 @@ class HealingSkill(ActiveSkill):
     def calculate_healing(self, attacker):
         highest_stat = max(attacker.strength, attacker.intelligence)
         return highest_stat * self.healing_rate
+    
+
+class ShengqilindiSkill(CommandSkill):
+    """
+    战斗开始后前2回合，使敌军群体随机（2人）每回合都有90%的几率陷入缴械状态，无法进行普通攻击
+    """
+    name = "shengqilindi"
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+
+    def apply_effect(self, battle_service, attackers, defenders, current_turn):
+        # 只在战斗前2回合生效
+        if current_turn <= 2:
+            # 随机选择敌军两人
+            affected_defenders = random.sample(defenders, min(2, len(defenders)))
+            for defender in affected_defenders:
+                # 90%的几率使敌人陷入缴械状态
+                if random.random() < 0.9:
+                    defender.add_debuff("is_disarmed", self.duration)
 
 
 class WeizhenhuaxiaSkill(ActiveSkill):
@@ -150,11 +189,11 @@ class WeizhenhuaxiaSkill(ActiveSkill):
             damage_bonus = skill_effect["self_buff"]["damage_bonus"]
             attacker.add_buff(f"damage_bonus_{damage_bonus}", 2)
 
-    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if self.trigger_list[current_turn]:
-            self.prepare_effect(attacker, defenders, battle_service)
+            self.prepare_effect(skill_own_attacker, defenders, battle_service)
 
-            battle_service.skill_attack(attacker, defenders, self, targets=defenders)
+            battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
 
 
 class WeiMouMiKangSkill(ActiveSkill):
@@ -177,12 +216,12 @@ class WeiMouMiKangSkill(ActiveSkill):
                 else:
                     defender.add_debuff("is_weakness", 2)  # 虚弱
 
-    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if self.trigger_list[current_turn]:
-            self.prepare_effect(attacker, defenders, battle_service)
+            self.prepare_effect(skill_own_attacker, defenders, battle_service)
 
-            battle_service.skill_attack(attacker, defenders, self, targets=defenders)
-            attacker.remove_buff("ignore_defense")
+            battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
+            skill_own_attacker.remove_buff("ignore_defense")
 
 
 class HengsaoqianjunSkill(ActiveSkill):
@@ -203,16 +242,39 @@ class HengsaoqianjunSkill(ActiveSkill):
                     if self.is_triggered(0.3):
                         defender.add_debuff("is_taunted", 1)  # 震慑
 
-    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if self.trigger_list[current_turn]:
-            self.instant_effect(attacker, defenders, battle_service)
+            self.instant_effect(skill_own_attacker, defenders, battle_service)
 
-            battle_service.skill_attack(attacker, defenders, self, targets=defenders)
+            battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
+
+
+class JifengzhouyuSkill(ActiveSkill):
+    """
+    随机对敌军武将发动3-4次兵刃攻击（伤害率78%，每次提升6%），第3次和第4次攻击额外附带1回合禁疗状态
+    """
+    name = "jifengzhouyu"
+
+    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
+        super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
+        self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
+
+    def instant_effect(self, attacker, defenders, battle_service):
+        skill_effect = self.effect["normal"]
+        for defender in defenders:
+            if self.is_triggered(skill_effect.get("probability", 0)):
+                defender.add_debuff("is_nohealing", 1)  # 禁疗
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        if self.trigger_list[current_turn]:
+            self.instant_effect(skill_own_attacker, defenders, battle_service)
+
+            battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
 
 
 class QianlizoudanqiSkill(PassiveSkill):
     """
-    战斗中，自身准备发动自带准备战法时，有70%几率（受武力影响）获得洞察状态（免疫所有控制效果）并提高50武力，持续2回合，
+    战斗中，自身准备发动自带准备战法时，有70%几率（受武力影响）获得洞察状态（免疫所有控制效果）并提高 50 武力，持续2回合，
     在此期间，自身受到普通攻击时，对攻击者进行一次反击（伤害率238%），每回合最多触发1次
     """
     name = "qianlizoudanqi"
@@ -255,18 +317,18 @@ class QianlizoudanqiSkill(PassiveSkill):
             return True
         return False
 
-    def apply_effect(self, battle_service, attacker, defenders, current_turn):
-        if attacker.counter_status_list and current_turn < len(attacker.counter_status_list):
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        if skill_own_attacker.counter_status_list and current_turn < len(skill_own_attacker.counter_status_list):
             if (
-                    attacker.counter_status_list[current_turn] and
-                    self.is_get_normal_attack(attacker, battle_service, current_turn)
+                    skill_own_attacker.counter_status_list[current_turn] and
+                    self.is_get_normal_attack(skill_own_attacker, battle_service, current_turn)
             ):
-                self.check_and_apply_effect(battle_service, attacker, current_turn)
-                attack_source = battle_service.was_attacked_in_current_round(attacker)
+                self.check_and_apply_effect(battle_service, skill_own_attacker, current_turn)
+                attack_source = battle_service.was_attacked_in_current_round(skill_own_attacker)
                 if attack_source:
-                    attack_attr, defend_attr = self.counter_attack(attacker, attack_source)
+                    attack_attr, defend_attr = self.counter_attack(skill_own_attacker, attack_source)
                     battle_service.skill_attack(
-                        attacker,
+                        skill_own_attacker,
                         attack_source,
                         self,
                         targets=attack_source,
@@ -289,21 +351,56 @@ class YanrenpaoxiaoSkill(PassiveSkill):
     def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
 
-    def apply_effect(self, battle_service, attacker, defenders, current_turn):
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         trigger_list = [False] * 8
         trigger_list[1] = trigger_list[3] = True
-        if attacker.is_leader:
+        if skill_own_attacker.is_leader:
             trigger_list[5] = True
         if trigger_list[current_turn]:
             if current_turn == 5:
                 self.effect["leader"]["attack_coefficient"] = 88
-            battle_service.skill_attack(attacker, defenders, self, targets=defenders)
+            battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
+
+
+class JixingzhenSkill(FormationSkill):
+    """
+    战斗前3回合，使敌军主将造成伤害降低40%（受武力影响），并使我军随机副将受到兵刃伤害降低18%，另一名副将受到谋略伤害降低18%
+    """
+    name = "jixingzhen"
+
+    def __init__(self, name, effect, duration):
+        super().__init__(name, effect, duration)
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        if current_turn <= 3:
+            reduction_factor = skill_own_attacker.get_general_property(skill_own_attacker.general_info, 45)["power"] * 0.1
+            for defender in defenders:
+                if defender.is_leader:
+                    value = 40 + reduction_factor
+                    defender.add_debuff(f"attack_reduction_{value}", 3)
+
+            if len(attackers) > 1:
+                random_attacker = random.choice(attackers[1:])
+                random_attacker.add_buff("physical_damage_reduction_18", 3)
+                index_defender = attackers.index(random_attacker)
+                if len(attackers) > 2:
+                    attackers[3 - index_defender].add_buff("intelligence_damage_reduction_18", 3)
+            battle_service.skill_attack(battle_service, attackers, defenders, current_turn)
+        else:
+            reduction_factor = skill_own_attacker.get_general_property(attackers[0].general_info, 45)["power"] * 0.1
+            for defender in defenders:
+                if defender.is_leader:
+                    value = 40 + reduction_factor
+                    defender.remove_debuff(f"attack_reduction_{value}")
+            for attacker in attackers:
+                attacker.remove_buff("physical_damage_reduction_18")
+                attacker.remove_buff("intelligence_damage_reduction_18")
 
 
 if __name__ == "__main__":
     # 创建技能
     skill_weizhenhuaxia = ActiveSkill(
-        name="威震华夏",
+        name="weizhenhuaxia",
         skill_type="prepare_active",
         attack_type="physical",
         quality="S",
@@ -377,7 +474,7 @@ if __name__ == "__main__":
     )
 
     skill_hengsaoqianjun = ActiveSkill(
-        name="横扫千军",
+        name="hengsaoqianjun",
         skill_type="instant_active",
         attack_type="physical",
         quality="S",
@@ -402,8 +499,35 @@ if __name__ == "__main__":
         activation_type="instant",
     )
 
+    skill_jiangmenhunv = ActiveSkill(
+        name="jiangmenhunv",
+        skill_type="instant_active",
+        attack_type="physical",
+        quality="S",
+        source="self_implemented",
+        source_general="guanyinping",
+        target="enemy_group",
+        effect={
+            "normal": {
+                "probability": 0.6,
+                "release_range": 2,
+                "target": "enemy",
+                "attack_coefficient": 128,
+                "to_enemy_buff": {
+                    "prerequisite ": {"target_attack_count": 3},
+                    "status": ["is_taunted"],
+                    "release_range": 2,
+                    "duration": 1,
+                    "additional_damage_coefficient": 20,  # 拥有虎嗔状态时，收到伤害时额外增加20%伤害，最多叠加三次
+                },
+                "status_probability": 1,
+            },
+        },
+        activation_type="instant",
+    )
+
     skill_jiangdongmenghu = ActiveSkill(
-        name="江东猛虎",
+        name="jiangdongmenghu",
         skill_type="instant_active",
         attack_type="physical",
         quality="S",
@@ -421,7 +545,7 @@ if __name__ == "__main__":
             },
             "leader": {
                 "probability": 0.5,
-                "release_range": "2",
+                "release_range": 2,
                 "target": "enemy",
                 "attack_coefficient": 126,
                 "status": ["taunt"],
@@ -431,6 +555,27 @@ if __name__ == "__main__":
                 }
             }
 
+        },
+        activation_type="instant",
+    )
+
+    skill_jifengzhouyu = ActiveSkill(
+        name="jifengzhouyu",
+        skill_type="instant_active",
+        attack_type="physical",
+        quality="S",
+        source="inherited",
+        source_general="sp-zhangliang,sp-zhangbao",
+        target="enemy_single",
+        effect={
+            "normal": {
+                "probability": 0.4,
+                "release_range": 1,
+                "target": "enemy",
+                "attack_coefficient": 78,
+                "status": ["is_nohealing"],
+                "status_duration": 1,
+            }
         },
         activation_type="instant",
     )

@@ -58,6 +58,17 @@ class BattleService:
             general.update_statuses()
 
     def get_debuff_status(self, general):
+        if "insight" in general.buff:
+            # 洞察状态下，除了 discommand(伪报)，所有的 debuff 都失效
+            return {
+                "is_stunned": False,
+                "is_silenced": False,
+                "is_disarmed": False,
+                "is_taunted": False,
+                "is_weakness": False,
+                "is_nohealing": False,
+            }
+    
         debuffs = general.debuff
         is_stunned = "is_stunned" in debuffs
         is_silenced = "is_silenced" in debuffs
@@ -65,6 +76,7 @@ class BattleService:
         is_discommand = "is_discommand" in debuffs
         is_taunted = "is_taunted" in debuffs
         is_weakness = "is_weakness" in debuffs
+        is_nohealing = "is_nohealing" in debuffs
         return {
             "is_stunned": is_stunned,
             "is_silenced": is_silenced,
@@ -72,6 +84,7 @@ class BattleService:
             "is_discommand": is_discommand,
             "is_taunted": is_taunted,
             "is_weakness": is_weakness,
+            "is_nohealing": is_nohealing,
         }
 
     def get_action_based_on_debuffs(self, general):
@@ -81,6 +94,11 @@ class BattleService:
         is_disarmed = "is_disarmed" in debuff
         is_discommand = "is_discommand" in debuff
         is_taunted = "is_taunted" in debuff
+
+        # 检查是否有洞察状态
+        if "insight" in general.buff and not is_discommand:
+            # 洞察状态下，所有的 debuff 都无效，正常行动
+            return "normal"
 
         # 震慑状态（技穷+缴械）：不能普通攻击和释放主动、突击技能；可以发动指挥、兵种和阵法
         if is_stunned or (is_silenced and is_disarmed):
@@ -140,34 +158,34 @@ class BattleService:
 
         if action == "stunned":
             if general.has_command_or_troop_skill():
-                general.execute_skills(self.team2.get_generals(), self, turn)
+                general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
             return
 
         if action == "disarmed_discommand":
             if general.has_active_or_troop_skill():
-                general.execute_skills(self.team2.get_generals(), self, turn)
+                general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
             return
 
         if action == "stunned_discommand":
             if general.has_troop_skill():
-                general.execute_skills(self.team2.get_generals(), self, turn)
+                general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
             return
 
         if action == "disarmed":
             if general.only_has_assault_skill():
                 return
-            general.execute_skills(self.team2.get_generals(), self, turn)
+            general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
             return
 
         if action == "discommand":
             if general.only_has_passive_skill() or general.only_has_command_skill():
                 return
-            general.execute_skills(self.team2.get_generals(), self, turn)
+            general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
             self.normal_attack(general, normal_attack_target)
             return
 
         # 正常情况下
-        general.execute_skills(self.team2.get_generals(), self, turn)
+        general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
         self.normal_attack(general, normal_attack_target)  # 普通攻击主将
 
     def record_normal_attack(self, attacker, defender, turn):
@@ -252,10 +270,13 @@ class BattleService:
 
         defender_basic_bonus = 0
         # 考虑防御者的增益效果
-        for buff_name in defender.buff:
+        for buff_name, duration_turn in defender.buff.items():
             if buff_name.startswith("damage_reduction_"):
                 defender_basic_bonus += int(buff_name.split("_")[-1])
-
+                if attack_type == "physical" and buff_name.startswith("physical_damage_reduction_"):
+                    defender_basic_bonus += int(buff_name.split("_")[-1])
+                elif attack_type == "intelligent" and buff_name.startswith("intelligence_damage_reduction_"):
+                    defender_basic_bonus += int(buff_name.split("_")[-1])
         troop_restriction = damage_service._is_troop_restriction(attacker, defender)
 
         damage = damage_service.calculate_damage(

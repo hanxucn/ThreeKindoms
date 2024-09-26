@@ -155,9 +155,9 @@ class GeneralService:
             skill_types.append(skill.skill_type)
         return skill_types
 
-    def execute_skills(self, defenders, battle_service, turn):
+    def execute_skills(self, attackers, defenders, battle_service, turn):
         for skill in self.skills:
-            skill.apply_effect(self, battle_service, self.general_info, defenders, turn)
+            skill.apply_effect(self, attackers, battle_service, defenders, turn)
 
     def is_self_preparing_skill(self):
         if self.general_info.get("self_skill")().skill_type == "prepare_active":

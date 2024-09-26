@@ -1,9 +1,9 @@
 
 # 禁疗状态
-NO_HEALING = "no_healing"
+is_nohealing = "no_healing"
 
 # 叛逃状态
-DEFECTION = "defection"
+defection = "defection"
 
 # DEBUFF 负面状态
 # 被嘲讽
