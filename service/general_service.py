@@ -124,15 +124,21 @@ class GeneralService:
             self.general_info["take_troops"] = 0
             self.alive = False
 
-    def add_buff(self, status, duration):
-        self.buff[status] = duration
+    def get_buff(self, status):
+        return self.buff.get(status, {})
+
+    def get_debuff(self, status):
+        return self.debuff.get(status, {})
+
+    def add_buff(self, status, value, duration=7):
+        self.buff[status] = {"value": value, "duration": duration}
 
     def remove_buff(self, status):
         if status in self.buff:
             del self.buff[status]
 
-    def add_debuff(self, status, duration):
-        self.debuff[status] = duration
+    def add_debuff(self, status, value, duration=7):
+        self.debuff[status] = {"value": value, "duration": duration}
 
     def remove_debuff(self, status):
         if status in self.debuff:
@@ -140,13 +146,13 @@ class GeneralService:
 
     def update_statuses(self):
         for status in list(self.buff.keys()):
-            self.buff[status] -= 1
-            if self.buff[status] <= 0:
+            self.buff[status]["duration"] -= 1
+            if self.buff[status]["duration"] <= 0:
                 self.remove_buff(status)
 
         for status in list(self.debuff.keys()):
-            self.debuff[status] -= 1
-            if self.debuff[status] <= 0:
+            self.debuff[status]["duration"] -= 1
+            if self.debuff[status]["duration"] <= 0:
                 self.remove_debuff(status)
 
     def include_skill_type(self):
@@ -184,21 +190,27 @@ class GeneralService:
             addition *= 1
         return addition
 
-    def get_general_property(self, general_info):
+    def get_general_property(self, general_info, power_extra=0, intelligence_extra=0, speed_extra=0, defense_extra=0):
         """
         get final property value
         :param general_info: general_info
+        :param power_extra: 额外增加的武力值
+        :param intelligence_extra: 额外增加的智力值
+        :param speed_extra: 额外增加的速度值
+        :param defense_extra: 额外增加的防御值
         :return:
         """
         # 计算将领最终武力基础值 + 等级 * 每级武力提升 + 满级时 50 点属性加成
-        power_value = general_info["basic_power"] + (self.user_level - 1) * general_info["power_up"]
+        power_value = general_info["basic_power"] + (self.user_level - 1) * general_info["power_up"] + power_extra
 
         intelligence_value = general_info["basic_intelligence"] + (
-                self.user_level - 1) * general_info["intelligence_up"]
+                self.user_level - 1) * general_info["intelligence_up"] + intelligence_extra
 
-        speed_value = general_info["basic_speed"] + (self.user_level - 1) * general_info["speed_up"]
+        speed_value = general_info["basic_speed"] + (self.user_level - 1) * general_info["speed_up"] + speed_extra
 
-        defense_value = general_info["basic_defense"] + (self.user_level - 1) * general_info["defense_up"]
+        defense_value = (
+                general_info["basic_defense"] + (self.user_level - 1) * general_info["defense_up"] + defense_extra
+        )
 
         # ext = self._arms_type_to_property(general_info["troop_adaptability"])
         # final_power_value = (final_power_value + user_add_property.get("power", 0)) * ext

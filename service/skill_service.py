@@ -137,10 +137,11 @@ class ShengqilindiSkill(CommandSkill):
     """
     name = "shengqilindi"
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, duration):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        self.duration = duration
 
-    def apply_effect(self, battle_service, attackers, defenders, current_turn):
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         # 只在战斗前2回合生效
         if current_turn <= 2:
             # 随机选择敌军两人
@@ -148,7 +149,70 @@ class ShengqilindiSkill(CommandSkill):
             for defender in affected_defenders:
                 # 90%的几率使敌人陷入缴械状态
                 if random.random() < 0.9:
-                    defender.add_debuff("is_disarmed", self.duration)
+                    defender.add_debuff("is_disarmed", 0, self.duration)
+
+
+class YongwutongshenSkill(CommandSkill):
+    """
+    战斗开始的第2、4、6、8回合，对敌军群体（2人）逐渐造成75%、105%、135%、165%谋略伤害（受智力影响）
+    """
+    name = "shengqilindi"
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        self.damage_schedule = {1: 75, 3: 105, 5: 135, 7: 165}  # 指定每个回合的伤害系数
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        # 仅在指定的回合数发动效果
+        if current_turn in self.damage_schedule:
+            skill_coefficient = self.damage_schedule[current_turn]
+            release_range = 2  # 每次攻击2个敌人
+            targets = battle_service.select_targets(defenders, release_range)
+            # 使用 battle_service 的 skill_attack 方法来处理技能伤害计算
+            battle_service.skill_attack(
+                attacker=skill_own_attacker,
+                defenders=defenders,
+                skill=self,
+                targets=targets,
+                custom_coefficient=skill_coefficient  # 使用自定义伤害系数
+            )
+
+
+class YingshilangguSkill(CommandSkill):
+    """
+    指挥技能：鹰视狼顾
+    - 战斗前4回合，每回合有80%概率使自身获得7%攻心或奇谋几率（每种效果最多叠加2次）；
+    - 第5回合起，每回合对1-2个敌军单体造成谋略伤害（伤害率154%，受智力影响）；
+    - 自身为主将时，获得16%奇谋几率。
+    """
+    name = "yingshilanggu"
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        self.attack_chance_buff_count = 0  # 记录攻心和奇谋的叠加次数
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        # 如果自身为主将，获得16%奇谋几率
+        if skill_own_attacker.is_leader:
+            skill_own_attacker.add_buff("intelligent_attack_double", 0.16, duration=7)
+        if current_turn <= 4:
+            # 战斗前4回合，有80%的概率获得7%攻心或奇谋几率，每种效果最多叠加2次
+            if self.is_triggered(0.8):
+                buff_type = "intelligent_attack_double" if random.random() < 0.5 else "intelligent_health_double"
+                if self.attack_chance_buff_count < 2:
+                    buff_info = skill_own_attacker.get_buff(buff_type)
+                    if buff_info:
+                        skill_own_attacker.add_buff(buff_type, buff_info["value"] + 0.07, duration=7)
+                    else:
+                        skill_own_attacker.add_buff(buff_type, 0.07, duration=7)
+                    self.attack_chance_buff_count += 1
+        elif current_turn >= 4:
+            # 第5回合起，每回合对1-2个敌军单体造成谋略伤害
+            battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
+
+    # def on_turn_start(self):
+    #     # 每回合开始，增加当前回合数
+    #     self.current_turn += 1
 
 
 class WeizhenhuaxiaSkill(ActiveSkill):
@@ -158,8 +222,8 @@ class WeizhenhuaxiaSkill(ActiveSkill):
     """
     name = "weizhenhuaxia"
 
-    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
-        super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
         self.trigger_list = self.simulate_trigger(self.effect["leader"]["probability"])
         self.counter_status_list = self._counter_status_list()
         source_general.counter_status_list = self.counter_status_list
@@ -182,12 +246,12 @@ class WeizhenhuaxiaSkill(ActiveSkill):
             skill_effect = self.effect["normal"]
         for defender in defenders:
             if self.is_triggered(skill_effect.get("status_probability", 0)):
-                defender.add_debuff("is_disarmed", 1)  # 缴械
+                defender.add_debuff("is_disarmed", 0, 1)  # 缴械
             if self.is_triggered(skill_effect.get("status_probability", 0)):
-                defender.add_debuff("is_silenced", 1)  # 计穷
+                defender.add_debuff("is_silenced", 0, 1)  # 计穷
         if "damage_bonus" in skill_effect.get("self_buff", {}):
             damage_bonus = skill_effect["self_buff"]["damage_bonus"]
-            attacker.add_buff(f"damage_bonus_{damage_bonus}", 2)
+            attacker.add_buff(f"damage_bonus", damage_bonus, 2)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if self.trigger_list[current_turn]:
@@ -203,8 +267,8 @@ class WeiMouMiKangSkill(ActiveSkill):
     """
     name = "weimoumikang"
 
-    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
-        super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def prepare_effect(self, attacker, defenders, battle_service):
@@ -212,9 +276,9 @@ class WeiMouMiKangSkill(ActiveSkill):
         for defender in defenders:
             if self.is_triggered(skill_effect.get("probability", 0)):
                 if "is_weakness" in defender.debuff:
-                    attacker.add_buff("ignore_defense", 1)
+                    attacker.add_buff("ignore_defense", 0, 1)  # 无视防御
                 else:
-                    defender.add_debuff("is_weakness", 2)  # 虚弱
+                    defender.add_debuff("is_weakness", 0, 2)  # 虚弱
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if self.trigger_list[current_turn]:
@@ -230,8 +294,8 @@ class HengsaoqianjunSkill(ActiveSkill):
     """
     name = "hengsaoqianjun"
 
-    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
-        super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def instant_effect(self, attacker, defenders, battle_service):
@@ -240,7 +304,7 @@ class HengsaoqianjunSkill(ActiveSkill):
             if self.is_triggered(skill_effect.get("probability", 0)):
                 if "is_disarmed" in defender.debuff or "is_silenced" in defender.debuff:
                     if self.is_triggered(0.3):
-                        defender.add_debuff("is_taunted", 1)  # 震慑
+                        defender.add_debuff("is_taunted", 0, 1)  # 震慑
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if self.trigger_list[current_turn]:
@@ -255,15 +319,15 @@ class JifengzhouyuSkill(ActiveSkill):
     """
     name = "jifengzhouyu"
 
-    def __init__(self, name, skill_type, quality, source, source_general, target, effect, activation_type):
-        super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def instant_effect(self, attacker, defenders, battle_service):
         skill_effect = self.effect["normal"]
         for defender in defenders:
             if self.is_triggered(skill_effect.get("probability", 0)):
-                defender.add_debuff("is_nohealing", 1)  # 禁疗
+                defender.add_debuff("is_nohealing", 0, 1)  # 禁疗
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if self.trigger_list[current_turn]:
@@ -285,8 +349,8 @@ class QianlizoudanqiSkill(PassiveSkill):
 
     def check_and_apply_effect(self, battle_service, attacker, current_turn):
         if attacker.is_self_preparing_skill() and self.is_triggered_by_power(attacker):
-            attacker.add_buff("insight", 2)
-            attacker.add_buff("power_up_50", 2)
+            attacker.add_buff("insight", 0, 2)
+            attacker.add_buff("power_up", 50, 2)
             print(f"获得洞察状态并提高50武力，持续2回合。")
 
     def is_triggered_by_power(self, attacker):
@@ -362,14 +426,31 @@ class YanrenpaoxiaoSkill(PassiveSkill):
             battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
 
 
+class ShibiesanriSkill(PassiveSkill):
+    """
+    战斗前3回合，无法进行普通攻击但获得30%概率规避效果，第4回合提高自己64点智力并对敌军全体造成谋略伤害（伤害率180%，受智力影响）
+    """
+    name = "shibiesanri"
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        if current_turn == 0:
+            skill_own_attacker.add_buff("is_evasion", 0, 3)
+        elif current_turn == 3:
+            skill_own_attacker.add_buff("intelligence_up", 64, 1)
+            battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
+
+
 class JixingzhenSkill(FormationSkill):
     """
     战斗前3回合，使敌军主将造成伤害降低40%（受武力影响），并使我军随机副将受到兵刃伤害降低18%，另一名副将受到谋略伤害降低18%
     """
     name = "jixingzhen"
 
-    def __init__(self, name, effect, duration):
-        super().__init__(name, effect, duration)
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, duration):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, duration)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if current_turn <= 3:
@@ -377,14 +458,14 @@ class JixingzhenSkill(FormationSkill):
             for defender in defenders:
                 if defender.is_leader:
                     value = 40 + reduction_factor
-                    defender.add_debuff(f"attack_reduction_{value}", 3)
+                    defender.add_debuff(f"attack_reduction", value, 3)
 
             if len(attackers) > 1:
                 random_attacker = random.choice(attackers[1:])
-                random_attacker.add_buff("physical_damage_reduction_18", 3)
+                random_attacker.add_buff("physical_damage_reduction", 18, 3)
                 index_defender = attackers.index(random_attacker)
                 if len(attackers) > 2:
-                    attackers[3 - index_defender].add_buff("intelligence_damage_reduction_18", 3)
+                    attackers[3 - index_defender].add_buff("intelligence_damage_reduction", 18, 3)
             battle_service.skill_attack(battle_service, attackers, defenders, current_turn)
         else:
             reduction_factor = skill_own_attacker.get_general_property(attackers[0].general_info, 45)["power"] * 0.1
@@ -445,6 +526,85 @@ if __name__ == "__main__":
             }
         },
         activation_type="prepare",
+    )
+
+    skill_yongwutongshen = YongwutongshenSkill(
+        name="yongwutongshen",
+        skill_type="command",
+        attack_type="intelligent",
+        quality="S",
+        source="inherited",
+        source_general="simayi",
+        target="enemy_group",
+        effect={
+            "normal": {
+                "probability": 1,
+                "release_range": 2
+            },
+        }
+    )
+
+    skill_yingshilanggu = YingshilangguSkill(
+        name="yingshilanggu",
+        skill_type="command",
+        attack_type="intelligent",
+        quality="S",
+        source="self_implemented",
+        source_general="simayi",
+        target="enemy_group",
+        effect={
+            "normal": {
+                "probability": 1,
+                "self_buff": [
+                    {
+                        "name": "intelligent_attack_double",
+                        "duration": 7,
+                        "damage_bonus": 200,
+                        "release_probability": 7,
+                        "probability": 0.8
+                    },
+                    {
+                        "name": "intelligent_health_double",
+                        "duration": 7,
+                        "health_bonus": 200,
+                        "probability": 0.8
+                    },
+                ],
+                "max_buff_count": 2,
+                "attack_coefficient": 154,
+                "target": "enemy",
+                "release_range": [1, 2]
+            },
+            "leader": {
+                "probability": 1,
+                "self_buff": [
+                    {
+                        "name": "intelligent_attack_double",
+                        "duration": 7,
+                        "damage_bonus": 200,
+                        "release_probability": 0.16,
+                        "probability": 1
+                    },
+                    {
+                        "name": "intelligent_attack_double",
+                        "duration": 7,
+                        "damage_bonus": 200,
+                        "release_probability": 7,
+                        "probability": 0.8
+                    },
+                    {
+                        "name": "intelligent_health_double",
+                        "duration": 7,
+                        "health_bonus": 200,
+                        "probability": 0.8
+                    },
+                ],
+                "max_buff_count": 2,
+                "attack_coefficient": 154,
+                "target": "enemy",
+                "release_range": [1, 2]
+            },
+        }
     )
 
     skill_weimoumikang = ActiveSkill(
@@ -559,7 +719,7 @@ if __name__ == "__main__":
         activation_type="instant",
     )
 
-    skill_jifengzhouyu = ActiveSkill(
+    skill_jifengzhouyu = JifengzhouyuSkill(
         name="jifengzhouyu",
         skill_type="instant_active",
         attack_type="physical",
@@ -627,6 +787,29 @@ if __name__ == "__main__":
                     "duration": 2,
                     "value": -50,
                     "prerequisite": ["is_disarmed", "is_silenced"],
+                },
+            },
+        },
+    )
+
+    skill_shibiesanri = PassiveSkill(
+        name="shibiesanri",
+        skill_type="passive",
+        attack_type="intelligent",
+        quality="S",
+        source="inherited",
+        source_general="lvmeng",
+        target="enemy_group",
+        effect={
+            "normal": {
+                "probability": 1,
+                "attack_coefficient": 180,
+                "release_range": 3,
+                "target": "enemy",
+                "self_buff": {
+                    "status": ["is_evasion"],  # 规避状态
+                    "duration": 3,
+                    "buff_probability": 0.3,
                 },
             },
         },

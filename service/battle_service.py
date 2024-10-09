@@ -205,7 +205,16 @@ class BattleService:
         defender.take_damage(damage)
         self.record_normal_attack(attacker, defender, self.round)
 
-    def skill_attack(self, attacker, defenders, skill, targets=None, attacker_attr=None, defender_attr=None):
+    def skill_attack(
+            self,
+            attacker,
+            defenders,
+            skill,
+            targets=None,
+            attacker_attr=None,
+            defender_attr=None,
+            custom_coefficient=None,
+    ):
         """
         处理技能攻击，计算并应用伤害和效果
         :param attacker: 攻击者
@@ -214,22 +223,39 @@ class BattleService:
         :param targets: 目标对象，如果为空则随机选择
         :param attacker_attr: 攻击者属性，如果为空则使用普通的攻击者属性
         :param defender_attr: 防御者属性，如果为空则使用普通的防御者属性
+        :param custom_coefficient: 自定义的伤害系数，如果提供则优先使用
         """
-
-        if "is_weakness" in attacker.debuff:
-            return 0
 
         # 直接技能计算伤害
         if attacker.is_leader:
             skill_effect = skill.effect.get("leader") if attacker.effect.get("leader") else attacker.effect.get("normal")
         else:
             skill_effect = skill.effect.get("normal")
-        skill_coefficient = skill_effect.get("attack_coefficient", 100)
-        release_range = skill_effect.get("release_range", 1)
+
+        skill_coefficient = custom_coefficient \
+            if custom_coefficient is not None else skill_effect.get("attack_coefficient", 100)
+        if skill.attack_type == "intelligent":
+            if (
+                    "intelligent_attack_double" in attacker.buff
+                    and random.random() < attacker.buff["intelligent_attack_double"]["value"]
+            ):
+                skill_coefficient *= 2
+
+        release_range = skill_effect.get("release_range")
+        if not release_range:
+            release_range = 1
+        elif isinstance(release_range, list):
+            release_range = random.choice(release_range)
+
         if not targets:
             targets = self.select_targets(defenders, release_range)
         for defender in targets:
-            damage = self.calculate_damage(attacker, defender, skill.attack_type, skill_coefficient)
+            if "is_weakness" in attacker.debuff or (
+                    defender.get_buff("is_evasion") and random.random() < defender.get_buff("is_evasion")["value"]
+            ):
+                damage = 0
+            else:
+                damage = self.calculate_damage(attacker, defender, skill.attack_type, skill_coefficient)
             defender.take_damage(damage)
 
     def calculate_damage(
@@ -245,6 +271,11 @@ class BattleService:
         :param defender_attr: 防御者属性，如果为空则使用普通的防御者属性
         :return:
         """
+        power_extra = 0
+        intelligence_extra = 0
+        speed_extra = 0
+        defense_extra = 0
+
         damage_service = DamageService()
         if attack_type == "physical":
             attacker_key = "power"
@@ -255,9 +286,15 @@ class BattleService:
             raise ValueError("Invalid attack type")
 
         if not attacker_attr:
-            attacker_attr = attacker.get_general_property(attacker.general_info)[attacker_key]
+            if attacker.get_buff("intelligence_up"):
+                intelligence_extra = attacker.get_buff("intelligence_up")["value"] or 0
+            attacker_attr = attacker.get_general_property(
+                attacker.general_info, power_extra, intelligence_extra, speed_extra, defense_extra
+            )[attacker_key]
         if not defender_attr:
-            defender_attr = defender.get_general_property(defender.general_info)[defender_key]
+            defender_attr = defender.get_general_property(
+                defender.general_info, power_extra, intelligence_extra, speed_extra, defense_extra
+            )[defender_key]
 
         if "ignore_defense" in attacker.buff:
             defender_attr = 0
@@ -265,18 +302,18 @@ class BattleService:
         attacker_basic_bonus = 0
         # 考虑攻击者的增益效果
         for buff_name in attacker.buff:
-            if buff_name.startswith("damage_bonus_"):
-                attacker_basic_bonus += int(buff_name.split("_")[-1])
+            if buff_name == "damage_bonus":
+                attacker_basic_bonus += int(attacker.buff[buff_name]["value"])
 
         defender_basic_bonus = 0
         # 考虑防御者的增益效果
-        for buff_name, duration_turn in defender.buff.items():
-            if buff_name.startswith("damage_reduction_"):
-                defender_basic_bonus += int(buff_name.split("_")[-1])
-                if attack_type == "physical" and buff_name.startswith("physical_damage_reduction_"):
-                    defender_basic_bonus += int(buff_name.split("_")[-1])
-                elif attack_type == "intelligent" and buff_name.startswith("intelligence_damage_reduction_"):
-                    defender_basic_bonus += int(buff_name.split("_")[-1])
+        for buff_name, buff_item in defender.buff.items():
+            if buff_name == "damage_reduction":
+                defender_basic_bonus += int(attacker[buff_name]["value"])
+            if attack_type == "physical" and buff_name == "physical_damage_reduction":
+                defender_basic_bonus += int(attacker[buff_name]["value"])
+            elif attack_type == "intelligent" and buff_name == "intelligence_damage_reduction":
+                defender_basic_bonus += int(attacker[buff_name]["value"])
         troop_restriction = damage_service._is_troop_restriction(attacker, defender)
 
         damage = damage_service.calculate_damage(
