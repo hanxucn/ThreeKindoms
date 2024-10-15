@@ -39,23 +39,23 @@ class GeneralService:
     # equipped_skills: 人物装配的其他两个技能
     # user_add_property：可分配属性，需要先调用 overall_can_allocation_property() 方法计算，由前端提供值
     def __init__(
-            self,
-            general_info,
-            is_dynamic,
-            is_classic,
-            fusion_count,
-            take_troops_type,
-            is_leader=False,
-            user_level=None,
-            equipped_skills=None,
-            user_add_property=None
+        self,
+        general_info,
+        is_dynamic,
+        is_classic,
+        fusion_count,
+        take_troops_type,
+        is_leader=False,
+        user_level=None,
+        equipped_skills=None,
+        user_add_property=None
     ):
         self.general_info = general_info
         self.skills = [self.general_info.self_skill].extend(equipped_skills)
         self.alive = True
         self.buff = {}
         self.debuff = {}
-        self.default_take_troops = 10000
+        self.curr_take_troops = {"current_troops": 10000, "wounded_troops": 0}
         self.is_dynamic = is_dynamic
         self.is_classic = is_classic
         self.fusion_count = fusion_count
@@ -119,9 +119,11 @@ class GeneralService:
         return self.user_add_property
 
     def take_damage(self, damage):
-        self.general_info["take_troops"] -= damage
-        if self.general_info["take_troops"] <= 0:
-            self.general_info["take_troops"] = 0
+        wounded_troops = int(damage * 0.9)
+        self.curr_take_troops["current_troops"] -= damage
+        self.curr_take_troops["wounded_troops"] += wounded_troops
+        if self.curr_take_troops["current_troops"] <= 0:
+            self.curr_take_troops["current_troops"] = 0
             self.alive = False
 
     def get_buff(self, status):

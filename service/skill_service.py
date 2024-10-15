@@ -178,6 +178,37 @@ class YongwutongshenSkill(CommandSkill):
             )
 
 
+class LuanshijianxiongSkill(CommandSkill):
+    """
+    战斗中，使友军群体（2人）造成的兵刃伤害和谋略伤害提高16%（受智力影响），自己受到的兵刃伤害和谋略伤害降低18%（受智力影响），
+    如果自己为主将，副将造成伤害时，会为主将恢复其伤害量10%的兵力
+    """
+    name = "luanshijianxiong"
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, self_groups):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        self._init_commander_buff(self_groups)
+
+    def _init_commander_buff(self, self_groups):
+        for general_obj in self_groups:
+            if not general_obj.is_leader():
+                general_obj.add_buff("luanshijianxiong", 10, duration=7)
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        # 友军群体（2人）造成的兵刃伤害和谋略伤害提高16%
+        intelligence_factor = 1 + skill_own_attacker.intelligence / 2000  # 假设智力影响比例为每100点智力增加5%
+        damage_increase = 16 * intelligence_factor
+        allies = battle_service.select_targets(attackers, 2)
+        for ally in allies:
+            ally.add_buff("physical_damage_increase", damage_increase, duration=7)
+            ally.add_buff("intelligent_damage_increase", damage_increase, duration=7)
+
+        # 自己受到的兵刃伤害和谋略伤害降低18%
+        damage_reduction = 18 * intelligence_factor
+        skill_own_attacker.add_buff("physical_damage_reduction", damage_reduction, duration=7)
+        skill_own_attacker.add_buff("intelligent_damage_reduction", damage_reduction, duration=7)
+
+
 class YingshilangguSkill(CommandSkill):
     """
     指挥技能：鹰视狼顾
@@ -542,6 +573,18 @@ if __name__ == "__main__":
                 "release_range": 2
             },
         }
+    )
+
+    skill_luanshijianxiong = LuanshijianxiongSkill(
+        name="luanshijianxiong",
+        skill_type="command",
+        attack_type="",
+        quality="S",
+        source="self_implemented",
+        source_general="caocao",
+        target="self_group",
+        effect={},
+        self_groups=[],
     )
 
     skill_yingshilanggu = YingshilangguSkill(

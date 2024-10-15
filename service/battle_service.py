@@ -1,7 +1,6 @@
 import random
 
 from damage_service import DamageService
-from skill_service import QianlizoudanqiSkill
 
 
 class BattleService:
@@ -127,19 +126,19 @@ class BattleService:
         # 正常情况下
         return "normal"
 
-    def select_targets(self, defenders, release_range=1):
+    def select_targets(self, targets, release_range=1):
         """
         选择攻击目标
-        :param defenders: 所有存活的敌方将领
+        :param targets: 所有存活的友方或者地方将领队伍，是一个 list，元素为每个将领的实例
         :param release_range: 攻击范围，1 表示单个目标，2 表示两个目标，3 表示所有目标
         :return: 选择的目标列表
         """
         if release_range == 1:
-            return [random.choice(defenders)]
+            return [random.choice(targets)]
         elif release_range == 2:
-            return random.sample(defenders, min(2, len(defenders)))
+            return random.sample(targets, min(2, len(targets)))
         elif release_range == 3:
-            return defenders
+            return targets
         else:
             raise ValueError("Invalid release_range value")
 
@@ -205,15 +204,73 @@ class BattleService:
         defender.take_damage(damage)
         self.record_normal_attack(attacker, defender, self.round)
 
+    def skill_heal(
+        self,
+        healer,
+        skill,
+        self_groups,
+        targets=None,
+        heal_extra_amount=0,
+        custom_coefficient=None,
+    ):
+        """
+        处理治疗技能，计算并应用治疗效果
+        :param healer: 释放治疗者
+        :param skill: 技能实例
+        :param self_groups: 友方队伍，list
+        :param targets: 目标对象，如果为空则随机选择己方人物
+        :param heal_extra_amount: 治疗是否受相关属性影响有所增加
+        :param custom_coefficient: 自定义的治疗系数，如果提供则优先使用
+        """
+
+        # 直接技能计算治疗
+        if healer.is_leader:
+            skill_effect = skill.effect.get("leader") if healer.effect.get("leader") else healer.effect.get("normal")
+        else:
+            skill_effect = skill.effect.get("normal")
+
+        heal_coefficient = custom_coefficient \
+            if custom_coefficient is not None else skill_effect.get("heal_coefficient", 100)
+
+        if not targets:
+            targets = self.select_targets(self_groups, 1)
+
+        if targets and isinstance(targets, list):
+            for target in targets:
+                if target.curr_take_troops["current_troops"] < 5000:
+                    base_heal = 320 + heal_extra_amount
+                else:
+                    base_heal = 420 + heal_extra_amount
+
+                healing_amount = int(base_heal * (heal_coefficient / 100))
+
+                healed_amount = min(target.wounded_troops, healing_amount)
+                target.curr_take_troops["wounded_troops"] -= healed_amount
+                target.curr_take_troops["current_troops"] = min(10000, target.current_troops + healed_amount)
+
+    def _luanshijianxiong_heal_skill(self, self_group):
+        caocao_general = None
+        for general_obj in self_group:
+            if general_obj.is_leader() and general_obj.general_info["name"] == "caocao":
+                caocao_general = general_obj
+                break
+        self.skill_heal(
+            caocao_general,
+            caocao_general.general_info["self_skill"],
+            self_groups=None,
+            targets=[caocao_general],
+        )
+
     def skill_attack(
-            self,
-            attacker,
-            defenders,
-            skill,
-            targets=None,
-            attacker_attr=None,
-            defender_attr=None,
-            custom_coefficient=None,
+        self,
+        attacker,
+        defenders,
+        skill,
+        targets=None,
+        attacker_attr=None,
+        defender_attr=None,
+        custom_coefficient=None,
+        self_group=None,
     ):
         """
         处理技能攻击，计算并应用伤害和效果
@@ -224,6 +281,7 @@ class BattleService:
         :param attacker_attr: 攻击者属性，如果为空则使用普通的攻击者属性
         :param defender_attr: 防御者属性，如果为空则使用普通的防御者属性
         :param custom_coefficient: 自定义的伤害系数，如果提供则优先使用
+        :param self_group: 友方队伍，list
         """
 
         # 直接技能计算伤害
@@ -257,9 +315,17 @@ class BattleService:
             else:
                 damage = self.calculate_damage(attacker, defender, skill.attack_type, skill_coefficient)
             defender.take_damage(damage)
+            if not attacker.is_leader() and attacker.get_buff("luanshijianxiong"):
+                self._luanshijianxiong_heal_skill(self_group)
 
     def calculate_damage(
-        self, attacker, defender, attack_type, skill_coefficient=100, attacker_attr=None, defender_attr=None
+        self,
+        attacker,
+        defender,
+        attack_type,
+        skill_coefficient=100,
+        attacker_attr=None,
+        defender_attr=None,
     ):
         """
         计算伤害
@@ -318,7 +384,7 @@ class BattleService:
 
         damage = damage_service.calculate_damage(
             attacker.user_level, defender.user_level, attacker_attr, defender_attr,
-            attacker.default_take_troops, defender.default_take_troops,
+            attacker.curr_take_troops["current_troops"], defender.curr_take_troops["current_troops"],
             attacker.fusion_count, defender.fusion_count, attacker_basic_bonus,
             defender_basic_bonus, 100, troop_restriction, skill_coefficient
         )
