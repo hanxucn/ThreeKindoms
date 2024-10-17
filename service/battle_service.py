@@ -13,7 +13,7 @@ class BattleService:
     如果人物带有缴械状态，则当前回合行动时候无法普通攻击，但是如果自身带有指挥战法或者被动战法或者兵种战法是可以正常释放的。
     如果人物带有伪报状态，则当前回合人物指挥、被动战法暂时失效，但普通攻击和技能释放仍然有效。
     如果人物带有被嘲讽状态，则在行动回合必须强制性普通攻击释放嘲讽状态的人物。
-    在战斗过程中以双方谁的主将首先阵亡，谁为输家。如果战斗的8个回合双方主将仍然存活，即视为平局。
+    在战斗过程中以双方谁的主将首先阵亡，谁为输家。如果战斗的 8 个回合双方主将仍然存活，即视为平局。
     =====
     战斗服务初始化时需要填入己方三人和对方三人的 general 人物信息，然后传入选择两方使用的兵种
     """
@@ -29,6 +29,7 @@ class BattleService:
 
     def prepare_battle(self):
         # 准备阶段：计算每个将领的属性值
+        # 准备阶段：初始化每个人物所携带的技能，初始化过程中会将有指挥、被动、兵种、阵法、的技能所可能在此阶段做出初始准备
         for team in [self.team1, self.team2]:
             for general in team.generals:
                 user_add_property = general.get_user_add_property()
@@ -37,6 +38,7 @@ class BattleService:
 
     def start_battle(self):
         self.prepare_battle()
+        # 双方只要主将还在存活就继续回合，直到8回合结束或者有一方主将阵亡即为结束
         while self.round < 8 and self.team1[0].is_alive() and self.team2[0].is_alive():
             self.execute_round()
             self.round += 1

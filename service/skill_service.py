@@ -474,6 +474,35 @@ class ShibiesanriSkill(PassiveSkill):
             battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
 
 
+class TroopSkill(Skill):
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+
+    def apply_effect(self):
+        pass
+
+
+class TengjiabingSkill(TroopSkill):
+    """
+    我军全体受到兵刃伤害降低24%（受统率影响），但处于灼烧状态时每回合额外损失兵力（伤害率300%）
+    """
+    def __init__(
+            self, name, skill_type, attack_type, quality, source, source_general, target, effect, owner, self_group
+    ):
+        super().__init__(
+            name, skill_type, attack_type, quality, source, source_general, target, effect
+        )
+        self._init_pre_effect(owner, self_group)
+
+    def _init_pre_effect(self, owner, self_group):
+        if owner.take_troops_type == "shield":
+            owner_attr = owner.get_general_property(owner.general_info)
+            owner_defense = owner_attr["defense"]
+            defense_up_factor = round((owner_defense - 100) * 20 / 7000, 2)
+            physical_damage_reduction = 24 * (1 + defense_up_factor)  # 如果携带者统帅为350，那么 24* (1+ 500 /700)= 24*1.71=41.04
+            for general_obj in self_group:
+                general_obj.add_buff("physical_damage_reduction", physical_damage_reduction, duration=7)
+
 class JixingzhenSkill(FormationSkill):
     """
     战斗前3回合，使敌军主将造成伤害降低40%（受武力影响），并使我军随机副将受到兵刃伤害降低18%，另一名副将受到谋略伤害降低18%
