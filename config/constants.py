@@ -16,6 +16,10 @@ is_disarmed = "is_disarmed"
 is_taunted = "is_taunted"
 # 被伪报
 is_discommand = "is_discommand"
+# 混乱
+is_confusion = "is_confusion"
+
+is_weakness = "is_weakness"
 
 # BUFF 增益状态
-is_evasion = "is_evasion"
+is_evasion = "is_evasion"  # 规避

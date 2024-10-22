@@ -415,8 +415,8 @@ class QianlizoudanqiSkill(PassiveSkill):
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if skill_own_attacker.counter_status_list and current_turn < len(skill_own_attacker.counter_status_list):
             if (
-                    skill_own_attacker.counter_status_list[current_turn] and
-                    self.is_get_normal_attack(skill_own_attacker, battle_service, current_turn)
+                skill_own_attacker.counter_status_list[current_turn] and
+                self.is_get_normal_attack(skill_own_attacker, battle_service, current_turn)
             ):
                 self.check_and_apply_effect(battle_service, skill_own_attacker, current_turn)
                 attack_source = battle_service.was_attacked_in_current_round(skill_own_attacker)
@@ -474,11 +474,41 @@ class ShibiesanriSkill(PassiveSkill):
             battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
 
 
+class MeihuoSkill(PassiveSkill):
+    """
+    自己受到普通攻击时，有45%几率使攻击者进入混乱（攻击和战法无差别选择目标）、计穷（无法发动主动战法）、虚弱（无法造成伤害）状态的一种，持续1回合，
+    自身为女性时，触发几率额外受智力影响
+    """
+    name = "meihuo"
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+
+    def on_receive_attack(self, attacker, skill_own_attacker):
+        # 基础触发概率为45%
+        trigger_probability = 0.45
+
+        # 如果持有技能的人物是女性，则概率额外受到智力的加成
+        if skill_own_attacker.gender == "female":
+            skill_own_attr = skill_own_attacker.get_general_property(skill_own_attacker.general_info)
+            intelligence_factor = round((skill_own_attr["intelligence"] - 100) * 20 / 7000, 2)
+            trigger_probability = 0.45 + (1 + intelligence_factor)
+
+        # 检查是否触发技能效果
+        if random.random() < trigger_probability:
+            # 随机选择一种负面状态
+            negative_effects = ["is_confusion", "is_silenced", "is_weakness"]
+            chosen_effect = random.choice(negative_effects)
+
+            # 对攻击者施加负面状态，持续1回合
+            attacker.add_debuff(chosen_effect, 0, duration=1)
+
+
 class TroopSkill(Skill):
     def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
 
-    def apply_effect(self):
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         pass
 
 
@@ -487,7 +517,7 @@ class TengjiabingSkill(TroopSkill):
     我军全体受到兵刃伤害降低24%（受统率影响），但处于灼烧状态时每回合额外损失兵力（伤害率300%）
     """
     def __init__(
-            self, name, skill_type, attack_type, quality, source, source_general, target, effect, owner, self_group
+        self, name, skill_type, attack_type, quality, source, source_general, target, effect, owner, self_group
     ):
         super().__init__(
             name, skill_type, attack_type, quality, source, source_general, target, effect
@@ -496,12 +526,19 @@ class TengjiabingSkill(TroopSkill):
 
     def _init_pre_effect(self, owner, self_group):
         if owner.take_troops_type == "shield":
+            buff_name = "physical_damage_reduction"
+            debuff_name = "tengjia_burning_up"
             owner_attr = owner.get_general_property(owner.general_info)
             owner_defense = owner_attr["defense"]
             defense_up_factor = round((owner_defense - 100) * 20 / 7000, 2)
             physical_damage_reduction = 24 * (1 + defense_up_factor)  # 如果携带者统帅为350，那么 24* (1+ 500 /700)= 24*1.71=41.04
             for general_obj in self_group:
-                general_obj.add_buff("physical_damage_reduction", physical_damage_reduction, duration=7)
+                buff_value = 0
+                if general_obj.get_buff(buff_name):
+                    buff_value = general_obj.get_buff(buff_name)["value"] or 0
+                general_obj.add_buff(buff_name, buff_value + physical_damage_reduction, duration=7)
+                general_obj.add_debuff(debuff_name, 3, duration=7)
+
 
 class JixingzhenSkill(FormationSkill):
     """
@@ -882,6 +919,29 @@ if __name__ == "__main__":
                     "status": ["is_evasion"],  # 规避状态
                     "duration": 3,
                     "buff_probability": 0.3,
+                },
+            },
+        },
+    )
+
+    skill_meihuo = PassiveSkill(
+        name="meihuo",
+        skill_type="passive",
+        attack_type="",
+        quality="S",
+        source="inherited",
+        source_general="zhenji",
+        target="enemy_group",
+        effect={
+            "normal": {
+                "probability": 1,
+                "attack_coefficient": 0,
+                "release_range": 1,
+                "target": "enemy",
+                "to_enemy_buff": {
+                    "status": ["is_confusion", "is_silenced", "is_weakness"],  # 混乱 技穷 虚弱
+                    "duration": 1,
+                    "buff_probability": 0.45,
                 },
             },
         },

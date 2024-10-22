@@ -201,10 +201,13 @@ class BattleService:
                     return record[0]
         return None
 
-    def normal_attack(self, attacker, defender, attack_type="physical", skill_coefficient=100):
-        damage = self.calculate_damage(attacker, defender, attack_type, skill_coefficient)
+    def normal_attack(self, current_user, defender, attack_type="physical", skill_coefficient=100):
+        damage = self.calculate_damage(current_user, defender, attack_type, skill_coefficient)
         defender.take_damage(damage)
-        self.record_normal_attack(attacker, defender, self.round)
+        self.record_normal_attack(current_user, defender, self.round)
+        for skill in defender.skills:
+            if skill.name == "meihuo":
+                skill.on_receive_attack(current_user, defender)
 
     def skill_heal(
         self,
@@ -265,7 +268,7 @@ class BattleService:
 
     def skill_attack(
         self,
-        attacker,
+        current_user,
         defenders,
         skill,
         targets=None,
@@ -273,10 +276,11 @@ class BattleService:
         defender_attr=None,
         custom_coefficient=None,
         self_group=None,
+        damage_type=None,
     ):
         """
         处理技能攻击，计算并应用伤害和效果
-        :param attacker: 攻击者
+        :param current_user: 当前行动者
         :param defenders: 防御者列表
         :param skill: 技能实例
         :param targets: 目标对象，如果为空则随机选择
@@ -284,20 +288,28 @@ class BattleService:
         :param defender_attr: 防御者属性，如果为空则使用普通的防御者属性
         :param custom_coefficient: 自定义的伤害系数，如果提供则优先使用
         :param self_group: 友方队伍，list
+        :param damage_type: 伤害特性：火攻(fire_attack)、水攻(water_attack)
         """
 
         # 直接技能计算伤害
-        if attacker.is_leader:
-            skill_effect = skill.effect.get("leader") if attacker.effect.get("leader") else attacker.effect.get("normal")
+        if current_user.is_leader:
+            skill_effect = skill.effect.get("leader") if current_user.effect.get("leader") else current_user.effect.get("normal")
         else:
             skill_effect = skill.effect.get("normal")
 
         skill_coefficient = custom_coefficient \
             if custom_coefficient is not None else skill_effect.get("attack_coefficient", 100)
+
+        if damage_type == "fire_attack":
+            for defender in defenders:
+                if defender.get_debuff("tengjia_burning_up"):
+                    skill_coefficient *= 3
+                    break
+
         if skill.attack_type == "intelligent":
             if (
-                    "intelligent_attack_double" in attacker.buff
-                    and random.random() < attacker.buff["intelligent_attack_double"]["value"]
+                "intelligent_attack_double" in current_user.buff
+                and random.random() < current_user.buff["intelligent_attack_double"]["value"]
             ):
                 skill_coefficient *= 2
 
@@ -310,19 +322,19 @@ class BattleService:
         if not targets:
             targets = self.select_targets(defenders, release_range)
         for defender in targets:
-            if "is_weakness" in attacker.debuff or (
-                    defender.get_buff("is_evasion") and random.random() < defender.get_buff("is_evasion")["value"]
+            if "is_weakness" in current_user.debuff or (
+                defender.get_buff("is_evasion") and random.random() < defender.get_buff("is_evasion")["value"]
             ):
                 damage = 0
             else:
-                damage = self.calculate_damage(attacker, defender, skill.attack_type, skill_coefficient)
+                damage = self.calculate_damage(current_user, defender, skill.attack_type, skill_coefficient)
             defender.take_damage(damage)
-            if not attacker.is_leader() and attacker.get_buff("luanshijianxiong"):
+            if not current_user.is_leader() and current_user.get_buff("luanshijianxiong"):
                 self._luanshijianxiong_heal_skill(self_group)
 
     def calculate_damage(
         self,
-        attacker,
+        current_user,
         defender,
         attack_type,
         skill_coefficient=100,
@@ -331,7 +343,7 @@ class BattleService:
     ):
         """
         计算伤害
-        :param attacker: 攻击者
+        :param current_user: 当前行动者
         :param defender: 被攻击者
         :param attack_type: 攻击类型：physical or intelligent
         :param skill_coefficient: 技能伤害系数，默认 100%
@@ -354,40 +366,40 @@ class BattleService:
             raise ValueError("Invalid attack type")
 
         if not attacker_attr:
-            if attacker.get_buff("intelligence_up"):
-                intelligence_extra = attacker.get_buff("intelligence_up")["value"] or 0
-            attacker_attr = attacker.get_general_property(
-                attacker.general_info, power_extra, intelligence_extra, speed_extra, defense_extra
+            if current_user.get_buff("intelligence_up"):
+                intelligence_extra = current_user.get_buff("intelligence_up")["value"] or 0
+            attacker_attr = current_user.get_general_property(
+                current_user.general_info, power_extra, intelligence_extra, speed_extra, defense_extra
             )[attacker_key]
         if not defender_attr:
             defender_attr = defender.get_general_property(
                 defender.general_info, power_extra, intelligence_extra, speed_extra, defense_extra
             )[defender_key]
 
-        if "ignore_defense" in attacker.buff:
+        if "ignore_defense" in current_user.buff:
             defender_attr = 0
 
         attacker_basic_bonus = 0
         # 考虑攻击者的增益效果
-        for buff_name in attacker.buff:
+        for buff_name in current_user.buff:
             if buff_name == "damage_bonus":
-                attacker_basic_bonus += int(attacker.buff[buff_name]["value"])
+                attacker_basic_bonus += int(current_user.buff[buff_name]["value"])
 
         defender_basic_bonus = 0
         # 考虑防御者的增益效果
         for buff_name, buff_item in defender.buff.items():
             if buff_name == "damage_reduction":
-                defender_basic_bonus += int(attacker[buff_name]["value"])
+                defender_basic_bonus += int(current_user[buff_name]["value"])
             if attack_type == "physical" and buff_name == "physical_damage_reduction":
-                defender_basic_bonus += int(attacker[buff_name]["value"])
+                defender_basic_bonus += int(current_user[buff_name]["value"])
             elif attack_type == "intelligent" and buff_name == "intelligence_damage_reduction":
-                defender_basic_bonus += int(attacker[buff_name]["value"])
-        troop_restriction = damage_service._is_troop_restriction(attacker, defender)
+                defender_basic_bonus += int(current_user[buff_name]["value"])
+        troop_restriction = damage_service._is_troop_restriction(current_user, defender)
 
         damage = damage_service.calculate_damage(
-            attacker.user_level, defender.user_level, attacker_attr, defender_attr,
-            attacker.curr_take_troops["current_troops"], defender.curr_take_troops["current_troops"],
-            attacker.fusion_count, defender.fusion_count, attacker_basic_bonus,
+            current_user.user_level, defender.user_level, attacker_attr, defender_attr,
+            current_user.curr_take_troops["current_troops"], defender.curr_take_troops["current_troops"],
+            current_user.fusion_count, defender.fusion_count, attacker_basic_bonus,
             defender_basic_bonus, 100, troop_restriction, skill_coefficient
         )
         return damage
