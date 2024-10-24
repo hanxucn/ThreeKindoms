@@ -182,12 +182,12 @@ class BattleService:
             if general.only_has_passive_skill() or general.only_has_command_skill():
                 return
             general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
-            self.normal_attack(general, normal_attack_target)
+            self.normal_attack(general, normal_attack_target, self.team2)
             return
 
         # 正常情况下
         general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
-        self.normal_attack(general, normal_attack_target)  # 普通攻击主将
+        self.normal_attack(general, normal_attack_target, self.team2)  # 普通攻击主将
 
     def record_normal_attack(self, attacker, defender, turn):
         if defender.name not in self.normal_attack_records:
@@ -201,9 +201,33 @@ class BattleService:
                     return record[0]
         return None
 
-    def normal_attack(self, current_user, defender, attack_type="physical", skill_coefficient=100):
+    def normal_attack(self, current_user, defender, enemy_groups, attack_type="physical", skill_coefficient=100):
+        guard_all_target = None
+        for defender in enemy_groups:
+            if defender.get_buff("guard_all"):
+                guard_all_target = defender
+        if guard_all_target:
+            defender = guard_all_target  # 将攻击目标改为携带 guard_all 的角色
+
         damage = self.calculate_damage(current_user, defender, attack_type, skill_coefficient)
         defender.take_damage(damage)
+
+        # 检查被攻击者是否有 is_restoration Buff
+        if defender.get_buff("is_restoration"):
+            # 调用 skill_heal 方法来进行治疗
+            heal_coefficient = defender.get_buff("is_restoration")["value"]  # 获取治疗系数，例如 192%
+            self.skill_heal(
+                healer=defender,
+                skill=None,  # 这里无需具体技能，因为是基于 buff 的治疗
+                self_groups=None,
+                targets=[defender],
+                custom_coefficient=heal_coefficient
+            )
+
+        # 如果存在被攻击者有受到攻击有概率清除攻击者的 Buff 时执行此逻辑
+        if defender.get_buff("remove_attacker_buff_on_attack"):
+            if random.random() <= defender.get_buff("remove_attacker_buff_on_attack")["value"]:
+                current_user.clean_all_buffs()
         self.record_normal_attack(current_user, defender, self.round)
         for skill in defender.skills:
             if skill.name == "meihuo":
@@ -227,12 +251,14 @@ class BattleService:
         :param heal_extra_amount: 治疗是否受相关属性影响有所增加
         :param custom_coefficient: 自定义的治疗系数，如果提供则优先使用
         """
-
-        # 直接技能计算治疗
-        if healer.is_leader:
-            skill_effect = skill.effect.get("leader") if healer.effect.get("leader") else healer.effect.get("normal")
+        if skill:
+            # 直接技能计算治疗
+            if healer.is_leader:
+                skill_effect = skill.effect.get("leader") if healer.effect.get("leader") else healer.effect.get("normal")
+            else:
+                skill_effect = skill.effect.get("normal")
         else:
-            skill_effect = skill.effect.get("normal")
+            skill_effect = {}
 
         heal_coefficient = custom_coefficient \
             if custom_coefficient is not None else skill_effect.get("heal_coefficient", 100)
@@ -306,10 +332,10 @@ class BattleService:
                     skill_coefficient *= 3
                     break
 
-        if skill.attack_type == "intelligent":
+        if skill.attack_type == "intelligence":
             if (
-                "intelligent_attack_double" in current_user.buff
-                and random.random() < current_user.buff["intelligent_attack_double"]["value"]
+                "intelligence_attack_double" in current_user.buff
+                and random.random() < current_user.buff["intelligence_attack_double"]["value"]
             ):
                 skill_coefficient *= 2
 
@@ -329,6 +355,17 @@ class BattleService:
             else:
                 damage = self.calculate_damage(current_user, defender, skill.attack_type, skill_coefficient)
             defender.take_damage(damage)
+            if defender.get_buff("is_restoration"):
+                # 调用 skill_heal 方法来进行治疗
+                heal_coefficient = defender.get_buff("is_restoration")["value"]  # 获取治疗系数，例如 192%
+                self.skill_heal(
+                    healer=defender,
+                    skill=None,  # 这里无需具体技能，因为是基于 buff 的治疗
+                    self_groups=None,
+                    targets=[defender],
+                    custom_coefficient=heal_coefficient
+                )
+
             if not current_user.is_leader() and current_user.get_buff("luanshijianxiong"):
                 self._luanshijianxiong_heal_skill(self_group)
 
@@ -345,7 +382,7 @@ class BattleService:
         计算伤害
         :param current_user: 当前行动者
         :param defender: 被攻击者
-        :param attack_type: 攻击类型：physical or intelligent
+        :param attack_type: 攻击类型：physical or intelligence
         :param skill_coefficient: 技能伤害系数，默认 100%
         :param attacker_attr: 攻击者属性，如果为空则使用普通的攻击者属性
         :param defender_attr: 防御者属性，如果为空则使用普通的防御者属性
@@ -360,7 +397,7 @@ class BattleService:
         if attack_type == "physical":
             attacker_key = "power"
             defender_key = "defense"
-        elif attack_type == "intelligent":
+        elif attack_type == "intelligence":
             attacker_key = defender_key = "intelligence"
         else:
             raise ValueError("Invalid attack type")
@@ -381,19 +418,31 @@ class BattleService:
 
         attacker_basic_bonus = 0
         # 考虑攻击者的增益效果
-        for buff_name in current_user.buff:
+        for buff_name, buff_item in current_user.buff.items():
             if buff_name == "damage_bonus":
-                attacker_basic_bonus += int(current_user.buff[buff_name]["value"])
+                attacker_basic_bonus += int(buff_item["value"])
+            if buff_name == f"{attacker_key}_damage_increase":
+                attacker_basic_bonus += int(buff_item["value"])
+
+        # 考虑攻击者的负面效果对受到伤害的影响
+        for buff_name, buff_item in current_user.debuff.items():
+            if buff_name == f"{attack_type}_damage_reduction":
+                attacker_basic_bonus -= int(buff_item["value"])
 
         defender_basic_bonus = 0
         # 考虑防御者的增益效果
         for buff_name, buff_item in defender.buff.items():
             if buff_name == "damage_reduction":
-                defender_basic_bonus += int(current_user[buff_name]["value"])
-            if attack_type == "physical" and buff_name == "physical_damage_reduction":
-                defender_basic_bonus += int(current_user[buff_name]["value"])
-            elif attack_type == "intelligent" and buff_name == "intelligence_damage_reduction":
-                defender_basic_bonus += int(current_user[buff_name]["value"])
+                defender_basic_bonus += int(buff_item["value"])
+            if buff_name == f"{attack_type}_damage_reduction":
+                defender_basic_bonus += int(buff_item["value"])
+            if buff_name == "damage_taken_reduction":
+                defender_basic_bonus += int(buff_item["value"])
+
+        # 考虑防御者负面效果对受到伤害的影响
+        for buff_name, debuff_item in defender.debuff.items():
+            if buff_name == "damage_taken_increase":
+                defender_basic_bonus -= int(debuff_item["value"])
         troop_restriction = damage_service._is_troop_restriction(current_user, defender)
 
         damage = damage_service.calculate_damage(

@@ -201,12 +201,12 @@ class LuanshijianxiongSkill(CommandSkill):
         allies = battle_service.select_targets(attackers, 2)
         for ally in allies:
             ally.add_buff("physical_damage_increase", damage_increase, duration=7)
-            ally.add_buff("intelligent_damage_increase", damage_increase, duration=7)
+            ally.add_buff("intelligence_damage_increase", damage_increase, duration=7)
 
         # 自己受到的兵刃伤害和谋略伤害降低18%
         damage_reduction = 18 * intelligence_factor
         skill_own_attacker.add_buff("physical_damage_reduction", damage_reduction, duration=7)
-        skill_own_attacker.add_buff("intelligent_damage_reduction", damage_reduction, duration=7)
+        skill_own_attacker.add_buff("intelligence_damage_reduction", damage_reduction, duration=7)
 
 
 class YingshilangguSkill(CommandSkill):
@@ -225,11 +225,11 @@ class YingshilangguSkill(CommandSkill):
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         # 如果自身为主将，获得16%奇谋几率
         if skill_own_attacker.is_leader:
-            skill_own_attacker.add_buff("intelligent_attack_double", 0.16, duration=7)
+            skill_own_attacker.add_buff("intelligence_attack_double", 0.16, duration=7)
         if current_turn <= 4:
             # 战斗前4回合，有80%的概率获得7%攻心或奇谋几率，每种效果最多叠加2次
             if self.is_triggered(0.8):
-                buff_type = "intelligent_attack_double" if random.random() < 0.5 else "intelligent_health_double"
+                buff_type = "intelligence_attack_double" if random.random() < 0.5 else "intelligence_health_double"
                 if self.attack_chance_buff_count < 2:
                     buff_info = skill_own_attacker.get_buff(buff_type)
                     if buff_info:
@@ -241,9 +241,41 @@ class YingshilangguSkill(CommandSkill):
             # 第5回合起，每回合对1-2个敌军单体造成谋略伤害
             battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
 
-    # def on_turn_start(self):
-    #     # 每回合开始，增加当前回合数
-    #     self.current_turn += 1
+
+class ZhenefangjuSkill(CommandSkill):
+    """
+    指挥技能：镇扼防拒
+    - 每回合有50%概率（受智力影响）使我军单体（优先选除自己之外的副将）援护所有友军并获得休整状态
+    - 休整状态：每回合恢复一次兵力，治疗率192%，受智力影响，持续1回合
+    - 同时使其在1回合内受到普通攻击时，有55%概率（受智力影响）移除攻击者的增益状态
+    """
+    name = "zhenefangju"
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        # 每回合有50%概率（受智力影响）选择我军单体获得效果
+        intelligence_factor = 1 + skill_own_attacker.intelligence / 1000  # 假设智力影响比例为每100点智力增加10%
+        trigger_probability = 0.5 * intelligence_factor
+
+        if self.is_triggered(trigger_probability):
+            # 优先选择除自己外的副将
+            potential_targets = [ally for ally in attackers if ally != skill_own_attacker and not ally.is_leader()]
+            if not potential_targets:
+                potential_targets = [ally for ally in attackers if ally != skill_own_attacker]
+
+            if potential_targets:
+                target = random.choice(potential_targets)
+                # 使目标获得援护所有友军的状态
+                target.add_buff("guard_all", value=0, duration=1)
+                # 获得休整状态，治疗率192%，受智力影响
+                heal_coefficient = 192
+                target.add_buff("is_restoration", heal_coefficient, duration=1)
+
+                # 受到普通攻击时，有55%概率移除攻击者的增益状态
+                remove_buff_probability = 0.55 * intelligence_factor
+                target.add_buff("remove_attacker_buff_on_attack", remove_buff_probability, duration=1)
 
 
 class WeizhenhuaxiaSkill(ActiveSkill):
@@ -365,6 +397,33 @@ class JifengzhouyuSkill(ActiveSkill):
             self.instant_effect(skill_own_attacker, defenders, battle_service)
 
             battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
+
+
+class GuaguliaoduSkill(ActiveSkill):
+    """
+    刮骨疗毒：为损失兵力最高的我军单体清除负面状态并为其恢复兵力（治疗率256%，受智力影响）
+    """
+    name = "guaguliaodu"
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        # 选择损失兵力最多的友军
+        target = max(attackers, key=lambda ally: ally.curr_take_troops["wounded_troops"])
+
+        # 清除负面状态
+        target.clean_all_debuffs()
+
+        # 使用 battle_service 的 skill_heal 方法进行治疗
+        battle_service.skill_heal(
+            healer=skill_own_attacker,
+            skill=self,
+            self_groups=attackers,
+            targets=[target],
+            heal_extra_amount=target.get_general_property(skill_own_attacker.general_info)["intelligence"],
+            custom_coefficient=256,
+        )
 
 
 class QianlizoudanqiSkill(PassiveSkill):
@@ -575,6 +634,28 @@ class JixingzhenSkill(FormationSkill):
                 attacker.remove_buff("intelligence_damage_reduction_18")
 
 
+class FengshizhenSkill(FormationSkill):
+    """
+    战斗中，使我军主将造成的伤害提升30%，受到的伤害提升20%；我军副将造成的伤害降低15%，受到的伤害降低25%
+    """
+    name = "fengshizhen"
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, duration):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, duration)
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        for general in attackers:
+            if general.is_leader:
+                general.add_buff("intelligence_damage_increase", 30, duration=7)
+                general.add_buff("physical_damage_increase", 30, duration=7)
+                general.add_debuff("damage_taken_increase", 20, duration=7)
+            else:
+                # 副将伤害降低和受到伤害降低
+                general.add_debuff("physical_damage_reduction", 15, duration=7)
+                general.add_debuff("intelligence_damage_reduction", 15, duration=7)
+                general.add_buff("damage_taken_reduction", 25, duration=0)
+
+
 if __name__ == "__main__":
     # 创建技能
     skill_weizhenhuaxia = ActiveSkill(
@@ -628,7 +709,7 @@ if __name__ == "__main__":
     skill_yongwutongshen = YongwutongshenSkill(
         name="yongwutongshen",
         skill_type="command",
-        attack_type="intelligent",
+        attack_type="intelligence",
         quality="S",
         source="inherited",
         source_general="simayi",
@@ -656,7 +737,7 @@ if __name__ == "__main__":
     skill_yingshilanggu = YingshilangguSkill(
         name="yingshilanggu",
         skill_type="command",
-        attack_type="intelligent",
+        attack_type="intelligence",
         quality="S",
         source="self_implemented",
         source_general="simayi",
@@ -666,14 +747,14 @@ if __name__ == "__main__":
                 "probability": 1,
                 "self_buff": [
                     {
-                        "name": "intelligent_attack_double",
+                        "name": "intelligence_attack_double",
                         "duration": 7,
                         "damage_bonus": 200,
                         "release_probability": 7,
                         "probability": 0.8
                     },
                     {
-                        "name": "intelligent_health_double",
+                        "name": "intelligence_health_double",
                         "duration": 7,
                         "health_bonus": 200,
                         "probability": 0.8
@@ -688,21 +769,21 @@ if __name__ == "__main__":
                 "probability": 1,
                 "self_buff": [
                     {
-                        "name": "intelligent_attack_double",
+                        "name": "intelligence_attack_double",
                         "duration": 7,
                         "damage_bonus": 200,
                         "release_probability": 0.16,
                         "probability": 1
                     },
                     {
-                        "name": "intelligent_attack_double",
+                        "name": "intelligence_attack_double",
                         "duration": 7,
                         "damage_bonus": 200,
                         "release_probability": 7,
                         "probability": 0.8
                     },
                     {
-                        "name": "intelligent_health_double",
+                        "name": "intelligence_health_double",
                         "duration": 7,
                         "health_bonus": 200,
                         "probability": 0.8
@@ -904,7 +985,7 @@ if __name__ == "__main__":
     skill_shibiesanri = PassiveSkill(
         name="shibiesanri",
         skill_type="passive",
-        attack_type="intelligent",
+        attack_type="intelligence",
         quality="S",
         source="inherited",
         source_general="lvmeng",

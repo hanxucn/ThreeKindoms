@@ -23,3 +23,4 @@ is_weakness = "is_weakness"
 
 # BUFF 增益状态
 is_evasion = "is_evasion"  # 规避
+is_restoration = "is_restoration"  # 休整状态

@@ -146,6 +146,12 @@ class GeneralService:
         if status in self.debuff:
             del self.debuff[status]
 
+    def clean_all_debuffs(self):
+        self.debuff = {}
+
+    def clean_all_buffs(self):
+        self.buff = {}
+
     def update_statuses(self):
         for status in list(self.buff.keys()):
             self.buff[status]["duration"] -= 1
