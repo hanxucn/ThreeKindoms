@@ -460,3 +460,7 @@ class BattleService:
             print("Team 1 wins!")
         else:
             print("It's a draw!")
+
+
+if __name__ == "__main__":
+    battle_service = BattleService()
