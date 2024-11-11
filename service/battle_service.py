@@ -1,6 +1,7 @@
 import random
 
 from damage_service import DamageService
+from general_service import GeneralService
 
 
 class BattleService:
@@ -460,3 +461,24 @@ class BattleService:
             print("Team 1 wins!")
         else:
             print("It's a draw!")
+
+
+if __name__ == "__main__":
+    from config.generals import guanyu
+    from service.skill_service import SkillService
+
+    skill_service = SkillService()
+
+    guanyu_info = {
+        "general_info": guanyu,
+        "is_dynamic": True,
+        "is_classic": True,
+        "fusion_count": 5,
+        "take_troops_type": "pike",
+        "is_leader": True,
+        "user_level": 50,
+        "equipped_skill_names": ["qianlizoudanqi", "weimoumikang"],
+    }
+
+    guanyu_general = GeneralService(**guanyu_info)
+
