@@ -1,4 +1,6 @@
-import random
+import importlib
+
+from core.base_skill import Skill
 
 
 """
@@ -12,6 +14,36 @@ class SkillService:
     """
     def __init__(self):
         self.skills = {}
+        self._load_skills()
+
+    def _load_skills(self):
+        """
+        初始化并加载所有可用的技能实例。
+        """
+        # 手动指定需要加载的技能模块
+        skill_modules = [
+            "core.active_skill",
+            "core.command_skill",
+            "core.formation_skill",
+            "core.passive_skill",
+            "core.troop_skill"
+        ]
+
+        for module_path in skill_modules:
+            module = importlib.import_module(module_path)
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if isinstance(attr, type) and issubclass(attr, Skill) and attr is not Skill:
+                    self._add_skill_instance(attr)
+
+    def _add_skill_instance(self, skill_class):
+        """
+        创建技能实例并添加到技能字典中。
+        :param skill_class: 技能类
+        """
+        skill_instance = skill_class()
+        if hasattr(skill_instance, 'name'):
+            self.skills[skill_instance.name] = skill_instance
 
     def get_skill(self, skill_name):
         """
@@ -21,145 +53,17 @@ class SkillService:
         """
         return self.skills.get(skill_name)
 
+    def load_skill(self, skill_name, skill_instance):
+        """
+        根据技能名称和实例更新或添加技能。
+        :param skill_name: 技能名称
+        :param skill_instance: 技能实例
+        """
+        self.skills[skill_name] = skill_instance
 
-if __name__ == "__main__":
-    # 创建技能
-
-    skill_yongwutongshen = YongwutongshenSkill(
-        name="yongwutongshen",
-        skill_type="command",
-        attack_type="intelligence",
-        quality="S",
-        source="inherited",
-        source_general="simayi",
-        target="enemy_group",
-        effect={
-            "normal": {
-                "probability": 1,
-                "release_range": 2
-            },
-        }
-    )
-
-    skill_luanshijianxiong = LuanshijianxiongSkill(
-        name="luanshijianxiong",
-        skill_type="command",
-        attack_type="",
-        quality="S",
-        source="self_implemented",
-        source_general="caocao",
-        target="self_group",
-        effect={},
-        self_groups=[],
-    )
-
-    skill_yingshilanggu = YingshilangguSkill(
-        name="yingshilanggu",
-        skill_type="command",
-        attack_type="intelligence",
-        quality="S",
-        source="self_implemented",
-        source_general="simayi",
-        target="enemy_group",
-        effect={
-            "normal": {
-                "probability": 1,
-                "self_buff": [
-                    {
-                        "name": "intelligence_attack_double",
-                        "duration": 7,
-                        "damage_bonus": 200,
-                        "release_probability": 7,
-                        "probability": 0.8
-                    },
-                    {
-                        "name": "intelligence_health_double",
-                        "duration": 7,
-                        "health_bonus": 200,
-                        "probability": 0.8
-                    },
-                ],
-                "max_buff_count": 2,
-                "attack_coefficient": 154,
-                "target": "enemy",
-                "release_range": [1, 2]
-            },
-            "leader": {
-                "probability": 1,
-                "self_buff": [
-                    {
-                        "name": "intelligence_attack_double",
-                        "duration": 7,
-                        "damage_bonus": 200,
-                        "release_probability": 0.16,
-                        "probability": 1
-                    },
-                    {
-                        "name": "intelligence_attack_double",
-                        "duration": 7,
-                        "damage_bonus": 200,
-                        "release_probability": 7,
-                        "probability": 0.8
-                    },
-                    {
-                        "name": "intelligence_health_double",
-                        "duration": 7,
-                        "health_bonus": 200,
-                        "probability": 0.8
-                    },
-                ],
-                "max_buff_count": 2,
-                "attack_coefficient": 154,
-                "target": "enemy",
-                "release_range": [1, 2]
-            },
-        }
-    )
-
-
-
-    skill_jifengzhouyu = JifengzhouyuSkill(
-        name="jifengzhouyu",
-        skill_type="instant_active",
-        attack_type="physical",
-        quality="S",
-        source="inherited",
-        source_general="sp-zhangliang,sp-zhangbao",
-        target="enemy_single",
-        effect={
-            "normal": {
-                "probability": 0.4,
-                "release_range": 1,
-                "target": "enemy",
-                "attack_coefficient": 78,
-                "status": ["is_nohealing"],
-                "status_duration": 1,
-            }
-        },
-        activation_type="instant",
-    )
-
-    skill_wudangfeijun = Skill(
-        name="无当飞军",
-        skill_type="troop",
-        attack_type="intelligence",
-        quality="S",
-        source="自带战法",
-        source_general="王平",
-        target="self_team",
-        effect={
-            "probability": 1.0,
-            "required_troop": "archer",
-            "buffs": {
-                "defense": 22,
-                "speed": 22,
-                "range": "all",
-                "target": "self",
-            },
-            "initial_effect": {
-                "status": "poison",
-                "duration": 3,
-                "attack_coefficient": 88
-            }
-        },
-    )
+    def list_skills(self):
+        """
+        返回所有已加载的技能名称。
+        :return: 技能名称列表
+        """
+        return list(self.skills.keys())

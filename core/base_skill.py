@@ -1,6 +1,7 @@
 
 import random
 
+
 class Skill:
     name = None
 

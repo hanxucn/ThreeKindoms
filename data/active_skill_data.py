@@ -182,3 +182,24 @@ skill_shimianmaifu = ActiveSkill(
     },
     activation_type="prepare",
 )
+
+skill_jifengzhouyu = ActiveSkill(
+        name="jifengzhouyu",
+        skill_type="instant_active",
+        attack_type="physical",
+        quality="S",
+        source="inherited",
+        source_general="sp-zhangliang,sp-zhangbao",
+        target="enemy_single",
+        effect={
+            "normal": {
+                "probability": 0.4,
+                "release_range": 1,
+                "target": "enemy",
+                "attack_coefficient": 78,
+                "status": ["is_nohealing"],
+                "status_duration": 1,
+            }
+        },
+        activation_type="instant",
+    )

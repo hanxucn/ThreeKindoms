@@ -1,30 +1,26 @@
-import random
-import math
+from service.skill_service import SkillService
 
-from skill_service import WeizhenhuaxiaSkill
-
-
-guanyu = {
-    "name": "guanyu",
-    "country": "shu",
-    "basic_power": 97,  # 默认1级初始武力值
-    "power_up": 2.68,  # 每升 1 级提升的武力值
-    "basic_defense": 97,  # 默认 1 级初始防御值
-    "defense_up": 2.04,  # 每升 1 级提升的防御值
-    "basic_intelligence": 79,  # 默认 1 级初始智力值
-    "intelligence_up": 1.05,  # 每升 1 级提升的智力值
-    "basic_speed": 74,  # 默认 1 级初始速度值
-    "speed_up": 1.3,  # 每升 1 级提升的速度值
-    "self_skill": WeizhenhuaxiaSkill,  # 自带战法
-    "type": "normal",  # 普通 or sp
-    # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
-    "troop_adaptability": {"pike": "s_level", "shield": "a_level", "bow": "c_level", "cavalry": "s_level"},
-    # "level": 50,  # 45 or 50  这个值从前端传入参数
-    # "add_property": {"power": 50},  # 默认升级全加力量，这里改用前端传递
-    "default_attack_type": "physical",  # 武力 physical  or 谋略 intelligence or 综合 combined
-    "has_dynamic": True,  # 是否有动态人物
-    "take_troops": 10000,  # 默认初始带满兵1W，如果为 45级 则为 95000
-}
+# guanyu = {
+#     "name": "guanyu",
+#     "country": "shu",
+#     "basic_power": 97,  # 默认1级初始武力值
+#     "power_up": 2.68,  # 每升 1 级提升的武力值
+#     "basic_defense": 97,  # 默认 1 级初始防御值
+#     "defense_up": 2.04,  # 每升 1 级提升的防御值
+#     "basic_intelligence": 79,  # 默认 1 级初始智力值
+#     "intelligence_up": 1.05,  # 每升 1 级提升的智力值
+#     "basic_speed": 74,  # 默认 1 级初始速度值
+#     "speed_up": 1.3,  # 每升 1 级提升的速度值
+#     "self_skill": WeizhenhuaxiaSkill,  # 自带战法
+#     "type": "normal",  # 普通 or sp
+#     # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
+#     "troop_adaptability": {"pike": "s_level", "shield": "a_level", "bow": "c_level", "cavalry": "s_level"},
+#     # "level": 50,  # 45 or 50  这个值从前端传入参数
+#     # "add_property": {"power": 50},  # 默认升级全加力量，这里改用前端传递
+#     "default_attack_type": "physical",  # 武力 physical  or 谋略 intelligence or 综合 combined
+#     "has_dynamic": True,  # 是否有动态人物
+#     "take_troops": 10000,  # 默认初始带满兵1W，如果为 45级 则为 95000
+# }
 
 
 class GeneralService:
@@ -47,11 +43,11 @@ class GeneralService:
         take_troops_type,
         is_leader=False,
         user_level=None,
-        equipped_skills=None,
-        user_add_property=None
+        equipped_skill_names=None,
+        user_add_property=None,
     ):
         self.general_info = general_info
-        self.skills = [self.general_info.self_skill].extend(equipped_skills)
+        self.skill_names = [self.general_info["self_skill_name"]].extend(equipped_skill_names)
         self.alive = True
         self.buff = {}
         self.debuff = {}
@@ -72,9 +68,17 @@ class GeneralService:
         }
         self.user_add_property = user_add_property
         self.counter_status_list = []
+        self.skills = self.get_skills()
 
     def is_alive(self):
         return self.alive and self.general_info["take_troops"] > 0
+
+    def get_skills(self):
+        skill_list = set()
+        skill_service = SkillService()
+        for skill_name in self.skill_names:
+            skill_list.add(skill_service.get_skill(skill_name))
+        return list(skill_list)
 
     def get_skill_types(self):
         skill_types = set()
@@ -277,6 +281,8 @@ class GeneralService:
 
 
 if __name__ == "__main__":
+    from config.generals import guanyu
+
     bs = GeneralService(guanyu, True, False, 5, 45)
     can_alloc_property = bs.overall_can_allocation_property()
     general_values = bs.ready_fight_general_property(

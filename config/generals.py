@@ -11,7 +11,7 @@ guanyu = {
     "intelligence_up": 1.05,  # 每升 1 级提升的智力值
     "basic_speed": 74,  # 默认 1 级初始速度值
     "speed_up": 1.3,  # 每升 1 级提升的速度值
-    "self_skill": "weizhenhuaxia",  # 自带战法
+    "self_skill_name": "weizhenhuaxia",  # 自带战法
     "type": "normal",  # 普通 or sp
     # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
     "troop_adaptability": {"pike": "s_level", "shield": "a_level", "bow": "c_level", "cavalry": "s_level"},
@@ -19,6 +19,7 @@ guanyu = {
     # "add_property": {"power": 50},  # 默认升级全加力量，这里改用前端传递
     "default_attack_type": "physical",  # 武力 physical  or 谋略 intelligence or 综合 combined
     "has_dynamic": True,  # 是否有动态人物
+    "has_classic": True,  # 是否有典藏人物
     "take_troops": 10000,  # 默认初始带满兵1W，如果为 45级 则为 95000
     "gender": "male",  # 性别
 }
@@ -34,7 +35,7 @@ guanyinping = {
     "intelligence_up": 0.76,  # 每升 1 级提升的智力值
     "basic_speed": 65,  # 默认 1 级初始速度值
     "speed_up": 1.21,  # 每升 1 级提升的速度值
-    "self_skill": "jiangmenhunv",  # 自带战法
+    "self_skill_name": "jiangmenhunv",  # 自带战法
     "type": "normal",  # 普通 or sp
     # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
     "troop_adaptability": {"pike": "s_level", "shield": "b_level", "bow": "c_level", "cavalry": "s_level"},
@@ -55,7 +56,7 @@ zhangfei = {
     "intelligence_up": 0.22,  # 每升 1 级提升的智力值
     "basic_speed": 70,  # 默认 1 级初始速度值
     "speed_up": 1.26,  # 每升 1 级提升的速度值
-    "self_skill": "yanrenpaoxiao",  # 自带战法
+    "self_skill_name": "yanrenpaoxiao",  # 自带战法
     "type": "normal",  # 普通 or sp
     # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
     "troop_adaptability": {"pike": "s_level", "shield": "s_level", "bow": "c_level", "cavalry": "a_level"},
@@ -77,7 +78,7 @@ simayi = {
     "intelligence_up": 2.67,  # 每升 1 级提升的智力值
     "basic_speed": 39,  # 默认 1 级初始速度值
     "speed_up": 0.82,  # 每升 1 级提升的速度值
-    "self_skill": "yingshilanggu",  # 自带战法
+    "self_skill_name": "yingshilanggu",  # 自带战法
     "type": "normal",  # 普通 or sp
     # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
     "troop_adaptability": {"pike": "s_level", "shield": "s_level", "bow": "a_level", "cavalry": "a_level"},
@@ -98,7 +99,7 @@ caocao = {
     "intelligence_up": 1.94,  # 每升 1 级提升的智力值
     "basic_speed": 64,  # 默认 1 级初始速度值
     "speed_up": 1.18,  # 每升 1 级提升的速度值
-    "self_skill": "luanshijianxiong",  # 自带战法
+    "self_skill_name": "luanshijianxiong",  # 自带战法
     "type": "normal",  # 普通 or sp
     # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
     "troop_adaptability": {"pike": "a_level", "shield": "s_level", "bow": "a_level", "cavalry": "s_level"},
@@ -119,7 +120,7 @@ manchong = {
     "intelligence_up": 2.08,  # 每升 1 级提升的智力值
     "basic_speed": 61,  # 默认 1 级初始速度值
     "speed_up": 1.08,  # 每升 1 级提升的速度值
-    "self_skill": "zhenefangju",  # 自带战法
+    "self_skill_name": "zhenefangju",  # 自带战法
     "type": "normal",  # 普通 or sp
     # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
     "troop_adaptability": {"pike": "b_level", "shield": "s_level", "bow": "a_level", "cavalry": "a_level"},
@@ -140,7 +141,7 @@ zhangcunhua = {
     "intelligence_up": 1.98,  # 每升 1 级提升的智力值
     "basic_speed": 48,  # 默认 1 级初始速度值
     "speed_up": 0.63,  # 每升 1 级提升的速度值
-    "self_skill": "chenduanjimou",  # 自带战法
+    "self_skill_name": "chenduanjimou",  # 自带战法
     "type": "normal",  # 普通 or sp
     # 部队兵种适应度:pike 枪兵 S，shield 盾兵 A, bow 弓箭 C, cavalry 骑兵 S
     "troop_adaptability": {"pike": "c_level", "shield": "a_level", "bow": "a_level", "cavalry": "a_level"},
