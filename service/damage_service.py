@@ -1,8 +1,6 @@
 import random
 import math
 
-from general_service import GeneralService
-
 
 class DamageService:
 

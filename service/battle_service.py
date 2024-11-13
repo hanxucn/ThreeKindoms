@@ -1,7 +1,7 @@
 import random
 
-from damage_service import DamageService
-from general_service import GeneralService
+from service.damage_service import DamageService
+from service.general_service import GeneralService
 
 
 class BattleService:
@@ -465,9 +465,8 @@ class BattleService:
 
 if __name__ == "__main__":
     from config.generals import guanyu
-    from service.skill_service import SkillService
 
-    skill_service = SkillService()
+    import pdb; pdb.set_trace()
 
     guanyu_info = {
         "general_info": guanyu,
@@ -481,4 +480,9 @@ if __name__ == "__main__":
     }
 
     guanyu_general = GeneralService(**guanyu_info)
+    can_allocation_property = guanyu_general.can_allocation_property
+    print("guanyu can_allocation_property:", can_allocation_property)
+    guanyu_general.user_add_property = {"power": can_allocation_property, "intelligence": 0, "speed": 0, "defense": 0}
+    guanyu_property = guanyu_general.get_general_property(guanyu_general.general_info)
+    print(guanyu_property)
 

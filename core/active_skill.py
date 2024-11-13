@@ -73,12 +73,61 @@ class WeizhenhuaxiaSkill(ActiveSkill):
     独立判定，持续1回合，并使自己造成的兵刃伤害提升36%，持续2回合；自身为主将时，造成控制效果的概率提高65%
     """
     name = "weizhenhuaxia"
+    effect = {
+        # normal 表示正常情况下的技能描述； leader 表示如果装备此战法的为主将有不同的技能描述
+        "normal": {
+            "probability": 0.35,
+            "attack_coefficient": 146,  # 此为 DamageService 里的 skill_coefficient
+            "release_range": 3,
+            "target": "enemy",
+            "to_enemy_buff": {
+                "status": ["is_disarmed", "is_silenced"],
+                "release_range": 3,
+                "duration": 1,
+            },
+            "status_probability": 0.5,
+            "self_buff": {
+                "type": "physical_damage",
+                "damage_bonus": 36,
+                "duration": 2,
+            }
+        },
+        "leader": {
+            "probability": 0.35,
+            "attack_coefficient": 146,
+            "release_range": 3,
+            "target": "enemy",
+            "to_enemy_buff": {
+                "status": ["is_disarmed", "is_silenced"],
+                "release_range": 3,
+                "duration": 1,
+            },
+            "status_probability": 0.65,
+            "self_buff": {
+                "type": "physical_damage",
+                "damage_bonus": 36,
+                "duration": 2,
+            }
+        }
+    }
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type):
+    def __init__(
+        self,
+        name="weizhenhuaxia",
+        skill_type="prepare_active",
+        attack_type="physical",
+        quality="S",
+        source="inherited",
+        source_general="guanyu",
+        target="enemy_group",
+        effect=None,
+        activation_type="prepare",
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
+        self.effect = effect or self.effect
         self.trigger_list = self.simulate_trigger(self.effect["leader"]["probability"])
-        self.counter_status_list = self._counter_status_list()
-        source_general.counter_status_list = self.counter_status_list
+        # self.counter_status_list = self._counter_status_list()
+        # source_general.counter_status_list = self.counter_status_list
 
     def _counter_status_list(self):
         counter_status_list = [False * 8]
