@@ -59,16 +59,16 @@ class GeneralService:
         self.is_leader = is_leader
         self.user_level = user_level if user_level else 50
         self.can_allocation_property = self.overall_can_allocation_property()
+        self.skills = self.get_skills()
         self.skill_types = self.get_skill_types()
         self.default_user_add_property = {
-            "power": self.can_allocation_property,
+            "power": 0,
             "intelligence": 0,
             "speed": 0,
             "defense": 0
         }
         self.user_add_property = user_add_property
         self.counter_status_list = []
-        self.skills = self.get_skills()
 
     def is_alive(self):
         return self.alive and self.general_info["take_troops"] > 0
@@ -118,6 +118,9 @@ class GeneralService:
         if self.skill_types and len(self.skill_types) == 1 and self.skill_types[0] == "command":
             return True
         return False
+
+    def set_user_add_property(self, user_add_property):
+        self.user_add_property = user_add_property
 
     def get_user_add_property(self):
         return self.user_add_property
@@ -202,10 +205,19 @@ class GeneralService:
             addition *= 1
         return addition
 
-    def get_general_property(self, general_info, power_extra=0, intelligence_extra=0, speed_extra=0, defense_extra=0):
+    def get_general_property(
+        self,
+        general_info,
+        user_add_property=None,
+        power_extra=0,
+        intelligence_extra=0,
+        speed_extra=0,
+        defense_extra=0
+    ):
         """
         get final property value
         :param general_info: general_info
+        :param user_add_property: 用户选择的加点，这个值从前端传入参数，是用户自己分配的加点（根据上面）
         :param power_extra: 额外增加的武力值
         :param intelligence_extra: 额外增加的智力值
         :param speed_extra: 额外增加的速度值
@@ -216,28 +228,30 @@ class GeneralService:
         power_value = general_info["basic_power"] + (self.user_level - 1) * general_info["power_up"] + power_extra
 
         intelligence_value = general_info["basic_intelligence"] + (
-                self.user_level - 1) * general_info["intelligence_up"] + intelligence_extra
+            self.user_level - 1) * general_info["intelligence_up"] + intelligence_extra
 
         speed_value = general_info["basic_speed"] + (self.user_level - 1) * general_info["speed_up"] + speed_extra
 
         defense_value = (
-                general_info["basic_defense"] + (self.user_level - 1) * general_info["defense_up"] + defense_extra
+            general_info["basic_defense"] + (self.user_level - 1) * general_info["defense_up"] + defense_extra
         )
 
-        # ext = self._arms_type_to_property(general_info["troop_adaptability"])
-        # final_power_value = (final_power_value + user_add_property.get("power", 0)) * ext
-        # final_intelligence_value = (final_intelligence_value + user_add_property.get("intelligence", 0)) * ext
-        # final_speed_value = (final_speed_value + user_add_property.get("speed", 0)) * ext
-        # if is_same_group:
-        #     final_power_value = int(final_power_value * 1.1)
-        #     final_intelligence_value = int(final_intelligence_value * 1.1)
-        #     final_speed_value = int(final_speed_value * 1.1)
-        return {
-            "power": power_value,
-            "intelligence": intelligence_value,
-            "speed": speed_value,
-            "defense": defense_value,
+        if not (self.user_add_property or user_add_property):
+            raise Exception("Need set user add property!")
+
+        user_add_property = self.user_add_property or user_add_property
+
+        general_property = {
+            "power": round(power_value + user_add_property["power"], 2),
+            "intelligence": round(intelligence_value + user_add_property["intelligence"], 2),
+            "speed": round(speed_value + user_add_property["speed"], 2),
+            "defense": round(defense_value + user_add_property["defense"], 2),
         }
+        if not self.take_troops_type:
+            raise Exception("Need set general take_troops_type")
+        ext = self._arms_type_to_property(self.general_info["troop_adaptability"].get(self.take_troops_type))
+        general_property = {key: value * ext for key, value in general_property.items()}
+        return general_property
 
     def overall_can_allocation_property(self) -> int:
         """
