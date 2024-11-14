@@ -204,14 +204,24 @@ class BattleService:
 
     def normal_attack(self, current_user, defender, enemy_groups, attack_type="physical", skill_coefficient=100):
         guard_all_target = None
-        for defender in enemy_groups:
-            if defender.get_buff("guard_all"):
-                guard_all_target = defender
+        for enemy in enemy_groups:
+            if enemy.get_buff("guard_all"):
+                guard_all_target = enemy
         if guard_all_target:
             defender = guard_all_target  # 将攻击目标改为携带 guard_all 的角色
 
         damage = self.calculate_damage(current_user, defender, attack_type, skill_coefficient)
         defender.take_damage(damage)
+
+        # 检查受到普通攻击的人是否带有 huchen buff，有此buff 且受到3次攻击需要加上震慑 debuff
+        if defender.get_debuff("huchen_attack_count") and defender.get_debuff("huchen_attack_count")["value"] == 3:
+            defender.add_debuff("is_taunted", 0, 1)  # 虎嗔
+            defender.remove_debuff("huchen_attack_count")  # 虎嗔攻击次数清零
+        elif defender.get_debuff("huchen_attack_count") and defender.get_debuff("huchen_attack_count")["value"] < 3:
+            defender.add_debuff(
+                "huchen_attack_count", value=defender.get_debuff("huchen_attack_count")["value"] + 1, duration=7
+            )  # 虎嗔攻击次数+1
+
 
         # 检查被攻击者是否有 is_restoration Buff
         if defender.get_buff("is_restoration"):

@@ -168,8 +168,36 @@ class WeiMouMiKangSkill(ActiveSkill):
     """
     name = "weimoumikang"
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type):
+    effect = {
+        # normal 表示正常情况下的技能描述； leader 表示如果装备此战法的为主将有不同的技能描述
+        "normal": {
+            "probability": 0.4,
+            "attack_coefficient": 158,  # 此为 DamageService 里的 skill_coefficient
+            "release_range": 2,
+            "target": "enemy",
+            "to_enemy_buff": {
+                "status": ["is_weakness"],
+                "release_range": 2,
+                "duration": 2,
+            },
+            "status_probability": 1,
+        }
+    }
+
+    def __init__(
+        self,
+        name="weimoumikang",
+        skill_type="prepare_active",
+        attack_type="physical",
+        quality="S",
+        source="inherited",
+        source_general=None,
+        target="enemy_group",
+        effect=None,
+        activation_type="prepare",
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
+        self.effect = effect or self.effect
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def prepare_effect(self, attacker, defenders, battle_service):
@@ -195,8 +223,37 @@ class HengsaoqianjunSkill(ActiveSkill):
     """
     name = "hengsaoqianjun"
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type):
+
+    effect = {
+        "normal": {
+            "probability": 0.4,
+            "attack_coefficient": 100,  # 此为 DamageService 里的 skill_coefficient
+            "release_range": 3,
+            "target": "enemy",
+            "to_enemy_buff": {
+                "prerequisite ": ["is_disarmed", "is_silenced"],
+                "status": ["is_taunted"],
+                "release_range": 3,
+                "duration": 1,
+            },
+            "status_probability": 0.3,
+        }
+    }
+
+    def __init__(
+        self,
+        name="hengsaoqianjun",
+        skill_type="instant_active",
+        attack_type="physical",
+        quality="S",
+        source="inherited",
+        source_general=None,
+        target="enemy_group",
+        effect=None,
+        activation_type="instant",
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
+        self.effect = effect or self.effect
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def instant_effect(self, attacker, defenders, battle_service):
@@ -212,6 +269,71 @@ class HengsaoqianjunSkill(ActiveSkill):
             self.instant_effect(skill_own_attacker, defenders, battle_service)
 
             battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders)
+
+
+class JiangmenhunvSkill(ActiveSkill):
+    name = "jiangmenhunv"
+
+    effect = {
+        "normal": {
+            "probability": 0.6,
+            "release_range": 2,
+            "target": "enemy",
+            "attack_coefficient": 128,
+            "to_enemy_buff": {
+                "prerequisite ": {"huchen_attack_count": 3},
+                "status": ["is_taunted"],
+                "release_range": 2,
+                "duration": 1,
+                "additional_damage_coefficient": 20,  # 拥有虎嗔状态时，收到伤害时额外增加20%伤害，最多叠加三次
+            },
+            "status_probability": 1,
+        },
+    }
+
+    def __init__(
+        self,
+        name="jiangmenhunv",
+        skill_type="instant_active",
+        attack_type="physical",
+        quality="S",
+        source="self_implemented",
+        source_general="guanyinping",
+        target="enemy_group",
+        effect=None,
+        activation_type="instant",
+    ):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
+        self.effect = effect or self.effect
+        self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
+
+    def select_targets(self, targets, release_range=1):
+        """
+        选择攻击目标
+        :param targets: 所有存活的友方或者地方将领队伍，是一个 list，元素为每个将领的实例
+        :param release_range: 攻击范围，1 表示单个目标，2 表示两个目标，3 表示所有目标
+        :return: 选择的目标列表
+        """
+        if release_range == 1:
+            return [random.choice(targets)]
+        elif release_range == 2:
+            return random.sample(targets, min(2, len(targets)))
+        elif release_range == 3:
+            return targets
+        else:
+            raise ValueError("Invalid release_range value")
+
+    def instant_effect(self, attacker, defenders, battle_service):
+        skill_effect = self.effect["normal"]
+        for defender in defenders:
+            defender.add_debuff("huchen_attack_count", value=0, duration=7)
+
+    def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        if self.trigger_list[current_turn]:
+            targets = self.select_targets(defenders, 2)
+            self.instant_effect(skill_own_attacker, targets, battle_service)
+
+            battle_service.skill_attack(skill_own_attacker, defenders, self, targets=targets)
 
 
 class JifengzhouyuSkill(ActiveSkill):
