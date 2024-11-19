@@ -17,7 +17,18 @@ class ShengqilindiSkill(CommandSkill):
     """
     name = "shengqilindi"
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, duration):
+    def __init__(
+        self,
+        name="shengqilindi",
+        skill_type="command",
+        attack_type="control",
+        quality="S",
+        source="inherited",
+        source_general="caopi,yanliang",
+        target="enemy_group",
+        effect=None,
+        duration=2,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
         self.duration = duration
 
@@ -36,9 +47,25 @@ class YongwutongshenSkill(CommandSkill):
     """
     战斗开始的第2、4、6、8回合，对敌军群体（2人）逐渐造成75%、105%、135%、165%谋略伤害（受智力影响）
     """
-    name = "shengqilindi"
+    name = "yongwutongshen",
+    effect = {
+        "normal": {
+            "probability": 1,
+            "release_range": 2
+        },
+    }
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+    def __init__(
+        self,
+        name="yongwutongshen",
+        skill_type="command",
+        attack_type="intelligence",
+        quality="S",
+        source="inherited",
+        source_general="simayi",
+        target="enemy_group",
+        effect=None,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
         self.damage_schedule = {1: 75, 3: 105, 5: 135, 7: 165}  # 指定每个回合的伤害系数
 
@@ -65,9 +92,18 @@ class LuanshijianxiongSkill(CommandSkill):
     """
     name = "luanshijianxiong"
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, self_groups):
+    def __init__(
+        self,
+        name="luanshijianxiong",
+        skill_type="command",
+        attack_type="",
+        quality="S",
+        source="self_implemented",
+        source_general="caocao",
+        target="self_group",
+        effect=None,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
-        self._init_commander_buff(self_groups)
 
     def _init_commander_buff(self, self_groups):
         for general_obj in self_groups:
@@ -75,6 +111,8 @@ class LuanshijianxiongSkill(CommandSkill):
                 general_obj.add_buff("luanshijianxiong", 10, duration=7)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
+        if current_turn == 0:
+            self._init_commander_buff(attackers)
         # 友军群体（2人）造成的兵刃伤害和谋略伤害提高16%
         intelligence_factor = 1 + skill_own_attacker.intelligence / 2000  # 假设智力影响比例为每100点智力增加5%
         damage_increase = 16 * intelligence_factor
@@ -97,9 +135,73 @@ class YingshilangguSkill(CommandSkill):
     - 自身为主将时，获得16%奇谋几率。
     """
     name = "yingshilanggu"
+    effect = {
+        "normal": {
+            "probability": 1,
+            "self_buff": [
+                {
+                    "name": "intelligence_attack_double",
+                    "duration": 7,
+                    "damage_bonus": 200,
+                    "release_probability": 7,
+                    "probability": 0.8
+                },
+                {
+                    "name": "intelligence_health_double",
+                    "duration": 7,
+                    "health_bonus": 200,
+                    "probability": 0.8
+                },
+            ],
+            "max_buff_count": 2,
+            "attack_coefficient": 154,
+            "target": "enemy",
+            "release_range": [1, 2]
+        },
+        "leader": {
+            "probability": 1,
+            "self_buff": [
+                {
+                    "name": "intelligence_attack_double",
+                    "duration": 7,
+                    "damage_bonus": 200,
+                    "release_probability": 0.16,
+                    "probability": 1
+                },
+                {
+                    "name": "intelligence_attack_double",
+                    "duration": 7,
+                    "damage_bonus": 200,
+                    "release_probability": 7,
+                    "probability": 0.8
+                },
+                {
+                    "name": "intelligence_health_double",
+                    "duration": 7,
+                    "health_bonus": 200,
+                    "probability": 0.8
+                },
+            ],
+            "max_buff_count": 2,
+            "attack_coefficient": 154,
+            "target": "enemy",
+            "release_range": [1, 2]
+        },
+    }
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+    def __init__(
+        self,
+        name="yingshilanggu",
+        skill_type="command",
+        attack_type="intelligence",
+        quality="S",
+        source="self_implemented",
+        source_general="simayi",
+        target="enemy_group",
+        effect=None,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        self.effect = effect or self.effect
         self.attack_chance_buff_count = 0  # 记录攻心和奇谋的叠加次数
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
@@ -131,7 +233,17 @@ class ZhenefangjuSkill(CommandSkill):
     """
     name = "zhenefangju"
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+    def __init__(
+        self,
+        name="zhenefangju",
+        skill_type="command",
+        attack_type="",
+        quality="S",
+        source="self_implemented",
+        source_general="mancong",
+        target="self_single",
+        effect=None,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):

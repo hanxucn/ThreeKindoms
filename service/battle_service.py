@@ -222,7 +222,6 @@ class BattleService:
                 "huchen_attack_count", value=defender.get_debuff("huchen_attack_count")["value"] + 1, duration=7
             )  # 虎嗔攻击次数+1
 
-
         # 检查被攻击者是否有 is_restoration Buff
         if defender.get_buff("is_restoration"):
             # 调用 skill_heal 方法来进行治疗

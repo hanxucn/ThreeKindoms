@@ -341,9 +341,32 @@ class JifengzhouyuSkill(ActiveSkill):
     随机对敌军武将发动3-4次兵刃攻击（伤害率78%，每次提升6%），第3次和第4次攻击额外附带1回合禁疗状态
     """
     name = "jifengzhouyu"
+    effect = {
+        "normal": {
+            "probability": 0.4,
+            "release_range": 1,
+            "target": "enemy",
+            "attack_coefficient": 78,
+            "attack_count": 4,
+            "status": ["is_nohealing"],
+            "status_duration": 1,
+        }
+    }
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type):
+    def __init__(
+        self,
+        name="jifengzhouyu",
+        skill_type="instant_active",
+        attack_type="physical",
+        quality="S",
+        source="inherited",
+        source_general="sp-zhangliang,sp-zhangbao",
+        target="enemy_single",
+        effect=None,
+        activation_type="instant",
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
+        self.effect = effect or self.effect
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def instant_effect(self, attacker, defenders, battle_service):
@@ -365,7 +388,17 @@ class GuaguliaoduSkill(ActiveSkill):
     """
     name = "guaguliaodu"
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+    def __init__(
+        self,
+        name="guaguliaodu",
+        skill_type="instant_active",
+        attack_type="heal",
+        quality="S",
+        source="inherited",
+        source_general="huatuo",
+        target=None,
+        effect=None,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):

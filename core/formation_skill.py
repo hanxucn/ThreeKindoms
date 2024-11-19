@@ -21,7 +21,18 @@ class JixingzhenSkill(FormationSkill):
     """
     name = "jixingzhen"
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, duration):
+    def __init__(
+        self,
+        name="jixingzhen",
+        skill_type="formation",
+        attack_type="",
+        quality="S",
+        source="inherited",
+        source_general="guanyinping,sp-yuansao",
+        target=None,
+        effect=None,
+        duration=3,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, duration)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
@@ -56,7 +67,18 @@ class FengshizhenSkill(FormationSkill):
     """
     name = "fengshizhen"
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, duration):
+    def __init__(
+        self,
+        name="fengshizhen",
+        skill_type="formation",
+        attack_type="",
+        quality="S",
+        source="inherited",
+        source_general="huangyueying,yuejin",
+        target="self_group",
+        effect=None,
+        duration=8,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, duration)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
