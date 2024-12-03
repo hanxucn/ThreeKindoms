@@ -1,7 +1,6 @@
-
 import random
 
-from base_skill import Skill
+from core.base_skill import Skill
 
 
 class PassiveSkill(Skill):
@@ -17,9 +16,21 @@ class QianlizoudanqiSkill(PassiveSkill):
     在此期间，自身受到普通攻击时，对攻击者进行一次反击（伤害率238%），每回合最多触发1次
     """
     name = "qianlizoudanqi"
+    effect = {"normal": {"attack_coefficient": 238}}
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+    def __init__(
+        self,
+        name="qianlizoudanqi",
+        skill_type="passive",
+        attack_type="passive",
+        quality="S",
+        source="events",
+        source_general=None,
+        target="self",
+        effect=None,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        self.effect = effect or self.effect
         self.counter_triggered = False
 
     def check_and_apply_effect(self, battle_service, attacker, current_turn):
@@ -85,10 +96,47 @@ class YanrenpaoxiaoSkill(PassiveSkill):
     战斗第2、4回合，对敌军全体造成兵刃攻击（伤害率104%）；若目标处于缴械状态或计穷状态，则额外使目标统率降低50%，持续2回合，
     自身为主将时，第6回合对敌军全体发动兵刃攻击（伤害率88%）
     """
-    name = "qianlizoudanqi"
+    name = "yanrenpaoxiao"
+    effect = {
+        "normal": {
+            "attack_coefficient": 104,
+            "release_range": 3,
+            "target": "enemy",
+            "release_turn_with_attack_coefficient": {2: 104, 4: 104},
+            "to_enemy_buff": {
+                "status": ["defense_reduction"],
+                "duration": 2,
+                "value": -50,
+                "prerequisite": ["is_disarmed", "is_silenced"],
+            },
+        },
+        "leader": {
+            "attack_coefficient": 104,
+            "release_range": 3,
+            "target": "enemy",
+            "release_turn_with_attack_coefficient": {2: 104, 4: 104, 6: 88},
+            "to_enemy_buff": {
+                "status": ["defense_reduction"],
+                "duration": 2,
+                "value": -50,
+                "prerequisite": ["is_disarmed", "is_silenced"],
+            },
+        },
+    }
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+    def __init__(
+        self,
+        name="yanrenpaoxiao",
+        skill_type="passive",
+        attack_type="physical",
+        quality="S",
+        source="self_implemented",
+        source_general="zhangfei",
+        target="enemy_group",
+        effect=None,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        self.effect = effect or self.effect
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         trigger_list = [False] * 8
@@ -106,9 +154,33 @@ class ShibiesanriSkill(PassiveSkill):
     战斗前3回合，无法进行普通攻击但获得30%概率规避效果，第4回合提高自己64点智力并对敌军全体造成谋略伤害（伤害率180%，受智力影响）
     """
     name = "shibiesanri"
+    effect = {
+        "normal": {
+            "probability": 1,
+            "attack_coefficient": 180,
+            "release_range": 3,
+            "target": "enemy",
+            "self_buff": {
+                "status": ["is_evasion"],  # 规避状态
+                "duration": 3,
+                "buff_probability": 0.3,
+            },
+        },
+    }
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+    def __init__(
+        self,
+        name="shibiesanri",
+        skill_type="passvie",
+        attack_type="intelligence",
+        quality="S",
+        source="inherited",
+        source_general="lvmeng",
+        target="enemy_group",
+        effect=None,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        self.effect = effect or self.effect
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if current_turn == 0:
@@ -124,9 +196,33 @@ class MeihuoSkill(PassiveSkill):
     自身为女性时，触发几率额外受智力影响
     """
     name = "meihuo"
+    effect = {
+        "normal": {
+            "probability": 1,
+            "attack_coefficient": 0,
+            "release_range": 1,
+            "target": "enemy",
+            "to_enemy_buff": {
+                "status": ["is_confusion", "is_silenced", "is_weakness"],  # 混乱 技穷 虚弱
+                "duration": 1,
+                "buff_probability": 0.45,
+            },
+        },
+    }
 
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
+    def __init__(
+        self,
+        name="meihuo",
+        skill_type="passive",
+        attack_type="",
+        quality="S",
+        source="inherited",
+        source_general="zhenji",
+        target="enemy_single",
+        effect=None,
+    ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        self.effect = effect or self.effect
 
     def on_receive_attack(self, attacker, skill_own_attacker):
         # 基础触发概率为45%

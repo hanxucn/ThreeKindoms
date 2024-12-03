@@ -1,7 +1,6 @@
-
 import random
 
-from base_skill import Skill
+from core.base_skill import Skill
 
 
 class FormationSkill(Skill):

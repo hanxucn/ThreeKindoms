@@ -46,8 +46,11 @@ class GeneralService:
         equipped_skill_names=None,
         user_add_property=None,
     ):
+        import pdb; pdb.set_trace()
         self.general_info = general_info
-        self.skill_names = [self.general_info["self_skill_name"]].extend(equipped_skill_names)
+        self.skill_names = [self.general_info["self_skill_name"]]
+        if equipped_skill_names:
+            self.skill_names.extend(equipped_skill_names)
         self.alive = True
         self.buff = {}
         self.debuff = {}

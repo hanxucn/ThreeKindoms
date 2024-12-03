@@ -1,15 +1,16 @@
 import random
 
-from base_skill import Skill
+from core.base_skill import Skill
 
 
 class ActiveSkill(Skill):
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type="prepare"):
+    def __init__(self, name=None, skill_type="", attack_type="", quality="", source="", source_general="", target="", effect={}, activation_type="prepare"):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
         self.activation_type = activation_type
         self.skill_type = "active"
         self.attack_type = attack_type
-        self.trigger_list = self.simulate_trigger(self.effect.get("probability", 1))
+        self.probability = self.effect.get("probability", 1) if self.effect else 1
+        self.trigger_list = self.simulate_trigger(self.probability)
 
     def active_skill_type(self, battle_service, attacker, defenders):
         if self.is_triggered(self.effect.get("probability", 1)):
@@ -49,7 +50,7 @@ class ActiveSkill(Skill):
 
 class HealingSkill(ActiveSkill):
     def __init__(
-            self, name, skill_type, quality, source, source_general, target, effect, activation_type, healing_rate
+        self, name=None, skill_type="", quality="", source="", source_general="", target="", effect={}, activation_type="prepare", healing_rate=0
     ):
         super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
         self.healing_rate = healing_rate
@@ -120,7 +121,7 @@ class WeizhenhuaxiaSkill(ActiveSkill):
         source="inherited",
         source_general="guanyu",
         target="enemy_group",
-        effect=None,
+        effect={},
         activation_type="prepare",
     ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
@@ -193,7 +194,7 @@ class WeiMouMiKangSkill(ActiveSkill):
         source="inherited",
         source_general=None,
         target="enemy_group",
-        effect=None,
+        effect={},
         activation_type="prepare",
     ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
@@ -249,7 +250,7 @@ class HengsaoqianjunSkill(ActiveSkill):
         source="inherited",
         source_general=None,
         target="enemy_group",
-        effect=None,
+        effect={},
         activation_type="instant",
     ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
@@ -300,7 +301,7 @@ class JiangmenhunvSkill(ActiveSkill):
         source="self_implemented",
         source_general="guanyinping",
         target="enemy_group",
-        effect=None,
+        effect={},
         activation_type="instant",
     ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
@@ -362,7 +363,7 @@ class JifengzhouyuSkill(ActiveSkill):
         source="inherited",
         source_general="sp-zhangliang,sp-zhangbao",
         target="enemy_single",
-        effect=None,
+        effect={},
         activation_type="instant",
     ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
@@ -397,7 +398,7 @@ class GuaguliaoduSkill(ActiveSkill):
         source="inherited",
         source_general="huatuo",
         target=None,
-        effect=None,
+        effect={},
     ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
 
