@@ -4,11 +4,15 @@ from core.base_skill import Skill
 
 
 class ActiveSkill(Skill):
-    def __init__(self, name=None, skill_type="", attack_type="", quality="", source="", source_general="", target="", effect={}, activation_type="prepare"):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+    effect = {}
+
+    def __init__(self, name=None, skill_type="", attack_type="", quality="", source="", source_general="", target="", activation_type="prepare"):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
         self.activation_type = activation_type
         self.skill_type = "active"
         self.attack_type = attack_type
+        self.activation_type = activation_type
+        import pdb; pdb.set_trace()
         self.probability = self.effect.get("probability", 1) if self.effect else 1
         self.trigger_list = self.simulate_trigger(self.probability)
 
@@ -50,9 +54,9 @@ class ActiveSkill(Skill):
 
 class HealingSkill(ActiveSkill):
     def __init__(
-        self, name=None, skill_type="", quality="", source="", source_general="", target="", effect={}, activation_type="prepare", healing_rate=0
+        self, name=None, skill_type="", quality="", source="", source_general="", target="", activation_type="prepare", healing_rate=0
     ):
-        super().__init__(name, skill_type, quality, source, source_general, target, effect, activation_type)
+        super().__init__(name, skill_type, quality, source, source_general, target, activation_type)
         self.healing_rate = healing_rate
 
     def instant_effect(self, attacker, defenders, battle_service):
@@ -121,11 +125,10 @@ class WeizhenhuaxiaSkill(ActiveSkill):
         source="inherited",
         source_general="guanyu",
         target="enemy_group",
-        effect={},
         activation_type="prepare",
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
-        self.effect = effect or self.effect
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, activation_type)
+        import pdb; pdb.set_trace()
         self.trigger_list = self.simulate_trigger(self.effect["leader"]["probability"])
         # self.counter_status_list = self._counter_status_list()
         # source_general.counter_status_list = self.counter_status_list
@@ -194,11 +197,10 @@ class WeiMouMiKangSkill(ActiveSkill):
         source="inherited",
         source_general=None,
         target="enemy_group",
-        effect={},
         activation_type="prepare",
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
-        self.effect = effect or self.effect
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, activation_type)
+        import pdb; pdb.set_trace()
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def prepare_effect(self, attacker, defenders, battle_service):
@@ -250,11 +252,9 @@ class HengsaoqianjunSkill(ActiveSkill):
         source="inherited",
         source_general=None,
         target="enemy_group",
-        effect={},
         activation_type="instant",
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
-        self.effect = effect or self.effect
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, activation_type)
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def instant_effect(self, attacker, defenders, battle_service):
@@ -301,11 +301,9 @@ class JiangmenhunvSkill(ActiveSkill):
         source="self_implemented",
         source_general="guanyinping",
         target="enemy_group",
-        effect={},
         activation_type="instant",
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
-        self.effect = effect or self.effect
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, activation_type)
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def select_targets(self, targets, release_range=1):
@@ -363,11 +361,9 @@ class JifengzhouyuSkill(ActiveSkill):
         source="inherited",
         source_general="sp-zhangliang,sp-zhangbao",
         target="enemy_single",
-        effect={},
         activation_type="instant",
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, activation_type)
-        self.effect = effect or self.effect
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, activation_type)
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def instant_effect(self, attacker, defenders, battle_service):
@@ -398,9 +394,8 @@ class GuaguliaoduSkill(ActiveSkill):
         source="inherited",
         source_general="huatuo",
         target=None,
-        effect={},
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         # 选择损失兵力最多的友军

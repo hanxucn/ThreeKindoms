@@ -201,7 +201,6 @@ class YingshilangguSkill(CommandSkill):
         effect=None,
     ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
-        self.effect = effect or self.effect
         self.attack_chance_buff_count = 0  # 记录攻心和奇谋的叠加次数
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):

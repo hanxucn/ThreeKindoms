@@ -3,8 +3,9 @@ import random
 
 class Skill:
     name = None
+    effect = {}
 
-    def __init__(self, name=None, skill_type="", attack_type="", quality="", source="", source_general="", target="", effect=None):
+    def __init__(self, name=None, skill_type="", attack_type="", quality="", source="", source_general="", target=""):
         self.name = name or self.name  # Use class-level name if not provided
         self.skill_type = skill_type
         self.attack_type = attack_type
@@ -12,7 +13,6 @@ class Skill:
         self.source = source
         self.source_general = source_general
         self.target = target
-        self.effect = effect or {}
 
     def is_triggered(self, probability) -> bool:
         """

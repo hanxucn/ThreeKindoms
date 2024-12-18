@@ -1,4 +1,5 @@
 from service.skill_service import SkillService
+from typing import Optional, List, Dict, Union
 
 # guanyu = {
 #     "name": "guanyu",
@@ -43,14 +44,22 @@ class GeneralService:
         take_troops_type,
         is_leader=False,
         user_level=None,
-        equipped_skill_names=None,
+        equipped_skill_names: Optional[List[Dict[str, str]]] = None,
         user_add_property=None,
     ):
-        import pdb; pdb.set_trace()
+        # 验证 equipped_skill_names 格式
+        if equipped_skill_names is not None:
+            if not isinstance(equipped_skill_names, list):
+                raise ValueError("equipped_skill_names must be a list")
+            for item in equipped_skill_names:
+                if not isinstance(item, dict) or "name" not in item or "type" not in item:
+                    raise ValueError("Each item in equipped_skill_names must be a dict with 'name' and 'type' keys")
+
         self.general_info = general_info
-        self.skill_names = [self.general_info["self_skill_name"]]
+        # Change skill_names to store both name and type
+        self.skill_names = [{"name": self.general_info["self_skill_name"].get("name"), "type": self.general_info["self_skill_name"].get("type")}]
         if equipped_skill_names:
-            self.skill_names.extend(equipped_skill_names)
+            self.skill_names.extend([{"name": item.get("name"), "type": item.get("type")} for item in equipped_skill_names])
         self.alive = True
         self.buff = {}
         self.debuff = {}
@@ -80,8 +89,10 @@ class GeneralService:
     def get_skills(self):
         skill_list = set()
         skill_service = SkillService()
-        for skill_name in self.skill_names:
-            skill_list.add(skill_service.get_skill(skill_name))
+        for skill_info in self.skill_names:
+            skill = skill_service.get_skill(skill_info["name"], skill_info["type"])
+            if skill:
+                skill_list.add(skill)
         return list(skill_list)
 
     def get_skill_types(self):

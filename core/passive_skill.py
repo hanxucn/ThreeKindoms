@@ -4,8 +4,11 @@ from core.base_skill import Skill
 
 
 class PassiveSkill(Skill):
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+    name = None
+    effect = {}
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
         self.skill_type = "passive"
         self.attack_type = attack_type
 
@@ -27,10 +30,8 @@ class QianlizoudanqiSkill(PassiveSkill):
         source="events",
         source_general=None,
         target="self",
-        effect=None,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
-        self.effect = effect or self.effect
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
         self.counter_triggered = False
 
     def check_and_apply_effect(self, battle_service, attacker, current_turn):
@@ -133,10 +134,8 @@ class YanrenpaoxiaoSkill(PassiveSkill):
         source="self_implemented",
         source_general="zhangfei",
         target="enemy_group",
-        effect=None,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
-        self.effect = effect or self.effect
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         trigger_list = [False] * 8
@@ -177,10 +176,8 @@ class ShibiesanriSkill(PassiveSkill):
         source="inherited",
         source_general="lvmeng",
         target="enemy_group",
-        effect=None,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
-        self.effect = effect or self.effect
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if current_turn == 0:
@@ -219,10 +216,8 @@ class MeihuoSkill(PassiveSkill):
         source="inherited",
         source_general="zhenji",
         target="enemy_single",
-        effect=None,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
-        self.effect = effect or self.effect
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
 
     def on_receive_attack(self, attacker, skill_own_attacker):
         # 基础触发概率为45%
