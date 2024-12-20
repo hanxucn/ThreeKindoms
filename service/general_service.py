@@ -257,15 +257,15 @@ class GeneralService:
         user_add_property = self.user_add_property or user_add_property
 
         general_property = {
-            "power": round(power_value + user_add_property["power"], 2),
-            "intelligence": round(intelligence_value + user_add_property["intelligence"], 2),
-            "speed": round(speed_value + user_add_property["speed"], 2),
-            "defense": round(defense_value + user_add_property["defense"], 2),
+            "power": power_value + user_add_property["power"],
+            "intelligence": intelligence_value + user_add_property["intelligence"],
+            "speed": speed_value + user_add_property["speed"],
+            "defense": defense_value + user_add_property["defense"],
         }
         if not self.take_troops_type:
             raise Exception("Need set general take_troops_type")
         ext = self._arms_type_to_property(self.general_info["troop_adaptability"].get(self.take_troops_type))
-        general_property = {key: value * ext for key, value in general_property.items()}
+        general_property = {key: round((value * ext), 2) for key, value in general_property.items()}
         return general_property
 
     def overall_can_allocation_property(self) -> int:

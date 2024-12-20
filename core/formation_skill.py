@@ -4,8 +4,11 @@ from core.base_skill import Skill
 
 
 class FormationSkill(Skill):
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect, duration):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+    name = None
+    effect = {}
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, duration):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
         self.duration = duration  # 阵法的持续回合数，箕形阵持续 3 回合，锋矢阵持续 8 回合
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
@@ -19,6 +22,7 @@ class JixingzhenSkill(FormationSkill):
     战斗前3回合，使敌军主将造成伤害降低40%（受武力影响），并使我军随机副将受到兵刃伤害降低18%，另一名副将受到谋略伤害降低18%
     """
     name = "jixingzhen"
+    effect = {}
 
     def __init__(
         self,
@@ -29,10 +33,9 @@ class JixingzhenSkill(FormationSkill):
         source="inherited",
         source_general="guanyinping,sp-yuansao",
         target=None,
-        effect=None,
         duration=3,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, duration)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, duration)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if current_turn <= 3:
@@ -65,6 +68,7 @@ class FengshizhenSkill(FormationSkill):
     战斗中，使我军主将造成的伤害提升30%，受到的伤害提升20%；我军副将造成的伤害降低15%，受到的伤害降低25%
     """
     name = "fengshizhen"
+    effect = {}
 
     def __init__(
         self,
@@ -75,10 +79,9 @@ class FengshizhenSkill(FormationSkill):
         source="inherited",
         source_general="huangyueying,yuejin",
         target="self_group",
-        effect=None,
         duration=8,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect, duration)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, duration)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         for general in attackers:

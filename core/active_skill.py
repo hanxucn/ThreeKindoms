@@ -12,7 +12,6 @@ class ActiveSkill(Skill):
         self.skill_type = "active"
         self.attack_type = attack_type
         self.activation_type = activation_type
-        import pdb; pdb.set_trace()
         self.probability = self.effect.get("probability", 1) if self.effect else 1
         self.trigger_list = self.simulate_trigger(self.probability)
 
@@ -128,7 +127,6 @@ class WeizhenhuaxiaSkill(ActiveSkill):
         activation_type="prepare",
     ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, activation_type)
-        import pdb; pdb.set_trace()
         self.trigger_list = self.simulate_trigger(self.effect["leader"]["probability"])
         # self.counter_status_list = self._counter_status_list()
         # source_general.counter_status_list = self.counter_status_list
@@ -200,7 +198,6 @@ class WeiMouMiKangSkill(ActiveSkill):
         activation_type="prepare",
     ):
         super().__init__(name, skill_type, attack_type, quality, source, source_general, target, activation_type)
-        import pdb; pdb.set_trace()
         self.trigger_list = self.simulate_trigger(self.effect["normal"]["probability"])
 
     def prepare_effect(self, attacker, defenders, battle_service):
