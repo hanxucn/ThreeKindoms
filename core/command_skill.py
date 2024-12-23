@@ -4,8 +4,11 @@ from core.base_skill import Skill
 
 
 class CommandSkill(Skill):
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+    name = None
+    effect = {}
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         return super().apply_effect(skill_own_attacker, attackers, defenders, battle_service, current_turn)
@@ -26,10 +29,9 @@ class ShengqilindiSkill(CommandSkill):
         source="inherited",
         source_general="caopi,yanliang",
         target="enemy_group",
-        effect=None,
         duration=2,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
         self.duration = duration
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
@@ -64,9 +66,8 @@ class YongwutongshenSkill(CommandSkill):
         source="inherited",
         source_general="simayi",
         target="enemy_group",
-        effect=None,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
         self.damage_schedule = {1: 75, 3: 105, 5: 135, 7: 165}  # 指定每个回合的伤害系数
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
@@ -101,9 +102,8 @@ class LuanshijianxiongSkill(CommandSkill):
         source="self_implemented",
         source_general="caocao",
         target="self_group",
-        effect=None,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
 
     def _init_commander_buff(self, self_groups):
         for general_obj in self_groups:
@@ -198,9 +198,8 @@ class YingshilangguSkill(CommandSkill):
         source="self_implemented",
         source_general="simayi",
         target="enemy_group",
-        effect=None,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
         self.attack_chance_buff_count = 0  # 记录攻心和奇谋的叠加次数
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
@@ -241,9 +240,8 @@ class ZhenefangjuSkill(CommandSkill):
         source="self_implemented",
         source_general="mancong",
         target="self_single",
-        effect=None,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         # 每回合有50%概率（受智力影响）选择我军单体获得效果

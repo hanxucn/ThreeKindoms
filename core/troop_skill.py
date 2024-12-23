@@ -2,8 +2,10 @@ from core.base_skill import Skill
 
 
 class TroopSkill(Skill):
-    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target, effect):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+    effect = {}
+
+    def __init__(self, name, skill_type, attack_type, quality, source, source_general, target):
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         pass
@@ -14,26 +16,6 @@ class TengjiabingSkill(TroopSkill):
     我军全体受到兵刃伤害降低24%（受统率影响），但处于灼烧状态时每回合额外损失兵力（伤害率300%）
     """
     name = "tengjiabing"
-    attack_type = "",
-    quality = "S",
-    source = "self_implemented",
-    source_general = "wangping",
-    target = "self_team",
-    effect = {
-        "probability": 1.0,
-        "required_troop": "archer",
-        "buffs": {
-            "defense": 22,
-            "speed": 22,
-            "range": "all",
-            "target": "self",
-        },
-        "initial_effect": {
-            "status": "poison",
-            "duration": 3,
-            "attack_coefficient": 88
-        }
-    }
 
     def __init__(
         self,
@@ -44,9 +26,8 @@ class TengjiabingSkill(TroopSkill):
         source="inherited",
         source_general="",
         target="self_group",
-        effect=None,
     ):
-        super().__init__(name, skill_type, attack_type, quality, source, source_general, target, effect)
+        super().__init__(name, skill_type, attack_type, quality, source, source_general, target)
 
     def _init_pre_effect(self, owner, self_group):
         if owner.take_troops_type == "shield":
@@ -73,3 +54,28 @@ class WuDangFeiJunSkill(TroopSkill):
     我军全体统率、速度提高22点，首回合对敌军群体（2人）施加中毒状态，每回合持续造成伤害（伤害率80%，受智力影响），持续3回合；若王平统领，对敌军全体施加中毒状态，但伤害率降低（伤害率66%，受智力影响
     """
     name = "wudangfeijun"
+    quality = "S",
+    source = "self_implemented",
+    source_general = "wangping",
+    target = "self_team",
+    effect = {
+        "probability": 1.0,
+        "required_troop": "archer",
+        "buffs": {
+            "defense": 22,
+            "speed": 22,
+            "range": "all",
+            "target": "self",
+        },
+        "initial_effect": {
+            "status": "poison",
+            "duration": 3,
+            "attack_coefficient": 88
+        }
+    }
+
+class QingzhoubingSkill(TroopSkill):
+    """
+    战斗前2回合，使我军群体（2人）受到普通攻击时对攻击者进行一次反击（伤害率72%）。第三回合开始时依次为我军全体恢复兵力，优先兵力最低单体（治疗率180%，受武力影响，额外受敌军造成伤害影响）；若曹操统领，治疗额外受统率影响。
+    """
+    name = "qingzhoubing"
