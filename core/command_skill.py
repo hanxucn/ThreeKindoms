@@ -107,14 +107,14 @@ class LuanshijianxiongSkill(CommandSkill):
 
     def _init_commander_buff(self, self_groups):
         for general_obj in self_groups:
-            if not general_obj.is_leader():
+            if not general_obj.is_leader:
                 general_obj.add_buff("luanshijianxiong", 10, duration=7)
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         if current_turn == 0:
             self._init_commander_buff(attackers)
         # 友军群体（2人）造成的兵刃伤害和谋略伤害提高16%
-        intelligence_factor = 1 + skill_own_attacker.intelligence / 2000  # 假设智力影响比例为每100点智力增加5%
+        intelligence_factor = 1 + skill_own_attacker.curr_intelligence / 2000  # 假设智力影响比例为每100点智力增加5%
         damage_increase = 16 * intelligence_factor
         allies = battle_service.select_targets(attackers, 2)
         for ally in allies:
@@ -125,6 +125,14 @@ class LuanshijianxiongSkill(CommandSkill):
         damage_reduction = 18 * intelligence_factor
         skill_own_attacker.add_buff("physical_damage_reduction", damage_reduction, duration=7)
         skill_own_attacker.add_buff("intelligence_damage_reduction", damage_reduction, duration=7)
+        battle_service.skill_attack(
+            current_user=skill_own_attacker,
+            defenders=defenders,
+            skill=self,
+            targets=defenders,
+            is_damage_skill=False,
+            self_group=attackers,
+        )
 
 
 class YingshilangguSkill(CommandSkill):
@@ -245,12 +253,12 @@ class ZhenefangjuSkill(CommandSkill):
 
     def apply_effect(self, skill_own_attacker, attackers, defenders, battle_service, current_turn):
         # 每回合有50%概率（受智力影响）选择我军单体获得效果
-        intelligence_factor = 1 + skill_own_attacker.intelligence / 1000  # 假设智力影响比例为每100点智力增加10%
+        intelligence_factor = 1 + skill_own_attacker.curr_intelligence / 1000  # 假设智力影响比例为每100点智力增加10%
         trigger_probability = 0.5 * intelligence_factor
 
         if self.is_triggered(trigger_probability):
             # 优先选择除自己外的副将
-            potential_targets = [ally for ally in attackers if ally != skill_own_attacker and not ally.is_leader()]
+            potential_targets = [ally for ally in attackers if ally != skill_own_attacker and not ally.is_leader]
             if not potential_targets:
                 potential_targets = [ally for ally in attackers if ally != skill_own_attacker]
 

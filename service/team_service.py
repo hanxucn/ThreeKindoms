@@ -1,9 +1,9 @@
 
-from general_service import GeneralService
+from service.general_service import GeneralService
 
 
 class Team:
-    def __init__(self, generals):
+    def __init__(self, generals: list[GeneralService]):
         self.generals = generals
 
     def is_alive(self):
@@ -13,5 +13,5 @@ class Team:
         return self.generals[0]  # 主将是第一个将领
 
     def get_generals(self):
-        return [general for general in self.generals if general.is_alive()]
+        return [general for general in self.generals if general.is_alive]
 

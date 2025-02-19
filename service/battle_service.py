@@ -1,7 +1,11 @@
+import logging
 import random
+from typing import List
 
 from service.damage_service import DamageService
-from service.general_service import GeneralService
+from service.general_service import GeneralService as General
+from service.team_service import Team
+from core.base_skill import Skill
 
 
 class BattleService:
@@ -18,7 +22,7 @@ class BattleService:
     =====
     战斗服务初始化时需要填入己方三人和对方三人的 general 人物信息，然后传入选择两方使用的兵种
     """
-    def __init__(self, own_team, enemy_team, own_team_arm_type, enemy_team_arm_type):
+    def __init__(self, own_team: Team, enemy_team: Team, own_team_arm_type: str, enemy_team_arm_type: str):
         # each team has three generals
         self.team1 = own_team
         self.team2 = enemy_team
@@ -31,24 +35,34 @@ class BattleService:
     def prepare_battle(self):
         # 准备阶段：计算每个将领的属性值
         # 准备阶段：初始化每个人物所携带的技能，初始化过程中会将有指挥、被动、兵种、阵法、的技能所可能在此阶段做出初始准备
-        for team in [self.team1, self.team2]:
-            for general in team.generals:
-                user_add_property = general.get_user_add_property()
-                ready_value = general.ready_fight_general_property(user_add_property, self.own_team_arm_type)
-                general.general_info.update(ready_value)
+        for general in self.team1.generals:
+            user_add_property = general.get_user_add_property()
+            general.take_troops_type = self.own_team_arm_type
+            fit_level = general.general_info["troop_adaptability"].get(self.own_team_arm_type)
+            logging.info(f"准备阶段：{general.name}的兵种为{general.take_troops_type}， 兵种适应性为{fit_level}")
+            general.get_general_property(general.general_info, user_add_property)
+            # general.general_info.update(ready_value)
+
+        for general in self.team2.generals:
+            user_add_property = general.get_user_add_property()
+            general.take_troops_type = self.enemy_team_arm_type
+            fit_level = general.general_info["troop_adaptability"].get(self.enemy_team_arm_type)
+            logging.info(f"准备阶段：{general.name}的兵种为{general.take_troops_type}， 兵种适应性为{fit_level}")
+            general.get_general_property(general.general_info, user_add_property)
+            # general.general_info.update(ready_value)
 
     def start_battle(self):
         self.prepare_battle()
         # 双方只要主将还在存活就继续回合，直到8回合结束或者有一方主将阵亡即为结束
-        while self.round < 8 and self.team1[0].is_alive() and self.team2[0].is_alive():
+        while self.round < 8 and self.team1.get_main_general().is_alive() and self.team2.get_main_general().is_alive():
             self.execute_round()
             self.round += 1
-        self.determine_winner()
+        return self.determine_winner()
 
     def execute_round(self):
         actions = []
         for general in self.team1.get_generals() + self.team2.get_generals():
-            actions.append((general, general.get_general_property(general.general_info, 50)["speed"]))
+            actions.append((general, general.get_general_property(general.general_info)["speed"]))
         actions.sort(key=lambda x: x[1], reverse=True)
 
         for action in actions:
@@ -129,7 +143,7 @@ class BattleService:
         # 正常情况下
         return "normal"
 
-    def select_targets(self, targets, release_range=1):
+    def select_targets(self, targets, release_range=1) -> list:
         """
         选择攻击目标
         :param targets: 所有存活的友方或者地方将领队伍，是一个 list，元素为每个将领的实例
@@ -147,48 +161,55 @@ class BattleService:
 
     def execute_action(self, general, turn):
         # 根据当前状态执行行动
+        attackers = self.team1.get_generals() if general in self.team1.get_generals() else self.team2.get_generals()
+        defenders = self.team1.get_generals() if general not in self.team1.get_generals() else self.team2.get_generals()
+
         survive_defenders = [g for g in self.team2.get_generals() if g.is_alive()]
         if not survive_defenders:
             return
 
-        normal_attack_target = self.select_targets(survive_defenders)
+        normal_attack_targets = self.select_targets(survive_defenders)
         action = self.get_action_based_on_debuffs(general)
 
+        # 检查是否有嘲讽状态
         if action == "taunted":
             taunt_targets = [g for g in self.team2.get_generals() if "is_taunted" in g.buff]
-            normal_attack_target = taunt_targets[0] if taunt_targets else None
+            normal_attack_targets = [taunt_targets[0]] if taunt_targets else []
 
+        # 检查是否有震慑状态
         if action == "stunned":
             if general.has_command_or_troop_skill():
-                general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
+                general.execute_skills(general, attackers, defenders, self, turn)
             return
 
         if action == "disarmed_discommand":
             if general.has_active_or_troop_skill():
-                general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
+                general.execute_skills(general, attackers, defenders, self, turn)
             return
 
         if action == "stunned_discommand":
             if general.has_troop_skill():
-                general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
+                general.execute_skills(general, attackers, defenders, self, turn)
             return
 
         if action == "disarmed":
             if general.only_has_assault_skill():
                 return
-            general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
+            general.execute_skills(general, attackers, defenders, self, turn)
             return
 
         if action == "discommand":
             if general.only_has_passive_skill() or general.only_has_command_skill():
                 return
-            general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
-            self.normal_attack(general, normal_attack_target, self.team2)
+            general.execute_skills(general, attackers, defenders, self, turn)
+            for target in normal_attack_targets:
+                self.normal_attack(general, target, self.team2.generals)
             return
 
         # 正常情况下
-        general.execute_skills(general, self.team1.get_generals(), self.team2.get_generals(), self, turn)
-        self.normal_attack(general, normal_attack_target, self.team2)  # 普通攻击主将
+        general.execute_skills(general, attackers, defenders, self, turn)
+        for target in normal_attack_targets:
+            self.normal_attack(general, target, self.team2.generals)  # 普通攻击
 
     def record_normal_attack(self, attacker, defender, turn):
         if defender.name not in self.normal_attack_records:
@@ -239,7 +260,7 @@ class BattleService:
             if random.random() <= defender.get_buff("remove_attacker_buff_on_attack")["value"]:
                 current_user.clean_all_buffs()
         self.record_normal_attack(current_user, defender, self.round)
-        for skill in defender.skills:
+        for skill in defender.skills.values():
             if skill.name == "meihuo":
                 skill.on_receive_attack(current_user, defender)
 
@@ -285,34 +306,37 @@ class BattleService:
 
                 healing_amount = int(base_heal * (heal_coefficient / 100))
 
-                healed_amount = min(target.wounded_troops, healing_amount)
+                healed_amount = min(target.curr_take_troops["wounded_troops"], healing_amount)
                 target.curr_take_troops["wounded_troops"] -= healed_amount
-                target.curr_take_troops["current_troops"] = min(10000, target.current_troops + healed_amount)
+                target.curr_take_troops["current_troops"] = min(10000, target.curr_take_troops["current_troops"] + healed_amount)
 
     def _luanshijianxiong_heal_skill(self, self_group):
         caocao_general = None
         for general_obj in self_group:
-            if general_obj.is_leader() and general_obj.general_info["name"] == "caocao":
+            if general_obj.is_leader and general_obj.general_info["name"] == "caocao":
                 caocao_general = general_obj
                 break
-        self.skill_heal(
-            caocao_general,
-            caocao_general.general_info["self_skill"],
-            self_groups=None,
-            targets=[caocao_general],
-        )
+        if caocao_general:
+            self.skill_heal(
+                caocao_general,
+                caocao_general.skills.get("luanshijianxiong"),
+                self_groups=None,
+                targets=[caocao_general],
+            )
 
     def skill_attack(
         self,
-        current_user,
-        defenders,
-        skill,
+        current_user: General,
+        defenders: List[General],
+        skill: Skill,
         targets=None,
+        is_damage_skill=True,
         attacker_attr=None,
         defender_attr=None,
         custom_coefficient=None,
         self_group=None,
         damage_type=None,
+        curr_turn=None,
     ):
         """
         处理技能攻击，计算并应用伤害和效果
@@ -325,13 +349,14 @@ class BattleService:
         :param custom_coefficient: 自定义的伤害系数，如果提供则优先使用
         :param self_group: 友方队伍，list
         :param damage_type: 伤害特性：火攻(fire_attack)、水攻(water_attack)
+        :param curr_turn: 当前回合数
         """
 
         # 直接技能计算伤害
         if current_user.is_leader:
-            skill_effect = skill.effect.get("leader") if current_user.effect.get("leader") else current_user.effect.get("normal")
+            skill_effect = skill.effect.get("leader", {}) if skill.effect.get("leader") else skill.effect.get("normal")
         else:
-            skill_effect = skill.effect.get("normal")
+            skill_effect = skill.effect.get("normal", {})
 
         skill_coefficient = custom_coefficient \
             if custom_coefficient is not None else skill_effect.get("attack_coefficient", 100)
@@ -358,13 +383,14 @@ class BattleService:
         if not targets:
             targets = self.select_targets(defenders, release_range)
         for defender in targets:
-            if "is_weakness" in current_user.debuff or (
-                defender.get_buff("is_evasion") and random.random() < defender.get_buff("is_evasion")["value"]
-            ):
-                damage = 0
-            else:
-                damage = self.calculate_damage(current_user, defender, skill.attack_type, skill_coefficient)
-            defender.take_damage(damage)
+            if is_damage_skill:
+                if "is_weakness" in current_user.debuff or (
+                    defender.get_buff("is_evasion") and random.random() < defender.get_buff("is_evasion")["value"]
+                ):
+                    damage = 0
+                else:
+                    damage = self.calculate_damage(current_user, defender, skill.attack_type, skill_coefficient)
+                defender.take_damage(damage)
             if defender.get_buff("is_restoration"):
                 # 调用 skill_heal 方法来进行治疗
                 heal_coefficient = defender.get_buff("is_restoration")["value"]  # 获取治疗系数，例如 192%
@@ -376,26 +402,26 @@ class BattleService:
                     custom_coefficient=heal_coefficient
                 )
 
-            if not current_user.is_leader() and current_user.get_buff("luanshijianxiong"):
+            if not current_user.is_leader and current_user.get_buff("luanshijianxiong"):
                 self._luanshijianxiong_heal_skill(self_group)
 
     def calculate_damage(
         self,
         current_user,
-        defender,
+        target,
         attack_type,
         skill_coefficient=100,
         attacker_attr=None,
-        defender_attr=None,
+        target_attr=None,
     ):
         """
         计算伤害
         :param current_user: 当前行动者
-        :param defender: 被攻击者
-        :param attack_type: 攻击类型：physical or intelligence
+        :param target: 被攻击者
+        :param attack_type: 攻击类型: physical or intelligence
         :param skill_coefficient: 技能伤害系数，默认 100%
         :param attacker_attr: 攻击者属性，如果为空则使用普通的攻击者属性
-        :param defender_attr: 防御者属性，如果为空则使用普通的防御者属性
+        :param target_attr: 防御者属性，如果为空则使用普通的防御者属性
         :return:
         """
         power_extra = 0
@@ -410,21 +436,24 @@ class BattleService:
         elif attack_type == "intelligence":
             attacker_key = defender_key = "intelligence"
         else:
-            raise ValueError("Invalid attack type")
+            attack_type = ""
+            attacker_key = defender_key = ""
 
         if not attacker_attr:
             if current_user.get_buff("intelligence_up"):
                 intelligence_extra = current_user.get_buff("intelligence_up")["value"] or 0
-            attacker_attr = current_user.get_general_property(
-                current_user.general_info, power_extra, intelligence_extra, speed_extra, defense_extra
-            )[attacker_key]
-        if not defender_attr:
-            defender_attr = defender.get_general_property(
-                defender.general_info, power_extra, intelligence_extra, speed_extra, defense_extra
-            )[defender_key]
+            if attacker_key:
+                attacker_attr = current_user.get_general_property(
+                    current_user.general_info, power_extra, intelligence_extra, speed_extra, defense_extra
+                )[attacker_key]
+        if not target_attr:
+            if defender_key:
+                target_attr = target.get_general_property(
+                    target.general_info, power_extra, intelligence_extra, speed_extra, defense_extra
+                )[defender_key]
 
         if "ignore_defense" in current_user.buff:
-            defender_attr = 0
+            target_attr = 0
 
         attacker_basic_bonus = 0
         # 考虑攻击者的增益效果
@@ -441,7 +470,7 @@ class BattleService:
 
         defender_basic_bonus = 0
         # 考虑防御者的增益效果
-        for buff_name, buff_item in defender.buff.items():
+        for buff_name, buff_item in target.buff.items():
             if buff_name == "damage_reduction":
                 defender_basic_bonus += int(buff_item["value"])
             if buff_name == f"{attack_type}_damage_reduction":
@@ -450,26 +479,28 @@ class BattleService:
                 defender_basic_bonus += int(buff_item["value"])
 
         # 考虑防御者负面效果对受到伤害的影响
-        for buff_name, debuff_item in defender.debuff.items():
+        for buff_name, debuff_item in target.debuff.items():
             if buff_name == "damage_taken_increase":
                 defender_basic_bonus -= int(debuff_item["value"])
-        troop_restriction = damage_service._is_troop_restriction(current_user, defender)
+        troop_restriction = damage_service._is_troop_restriction(current_user, target)
 
         damage = damage_service.calculate_damage(
-            current_user.user_level, defender.user_level, attacker_attr, defender_attr,
-            current_user.curr_take_troops["current_troops"], defender.curr_take_troops["current_troops"],
-            current_user.fusion_count, defender.fusion_count, attacker_basic_bonus,
+            current_user.user_level, target.user_level, attacker_attr, target_attr,
+            current_user.curr_take_troops["current_troops"], target.curr_take_troops["current_troops"],
+            current_user.fusion_count, target.fusion_count, attacker_basic_bonus,
             defender_basic_bonus, 100, troop_restriction, skill_coefficient
         )
         return damage
 
-    def determine_winner(self):
+    def determine_winner(self) -> str:
+        result = ""
         if not self.team1.is_alive():
-            print("Team 2 wins!")
+            result = "Team 2 wins!"
         elif not self.team2.is_alive():
-            print("Team 1 wins!")
+            result = "Team 1 wins!"
         else:
-            print("It's a draw!")
+            result = "Draw!"
+        return result
 
 
 if __name__ == "__main__":
@@ -488,10 +519,9 @@ if __name__ == "__main__":
         "equipped_skill_names": ["qianlizoudanqi", "weimoumikang"],
     }
 
-    guanyu_general = GeneralService(**guanyu_info)
+    guanyu_general = General(**guanyu_info)
     can_allocation_property = guanyu_general.can_allocation_property
     print("guanyu can_allocation_property:", can_allocation_property)
     guanyu_general.user_add_property = {"power": can_allocation_property, "intelligence": 0, "speed": 0, "defense": 0}
     guanyu_property = guanyu_general.get_general_property(guanyu_general.general_info)
     print(guanyu_property)
-

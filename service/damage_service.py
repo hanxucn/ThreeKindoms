@@ -20,8 +20,8 @@ class DamageService:
             "shield": "bow",
             "bow": "pick",
         }
-        attacker_troop_type = attacker.general_info.take_troops_type
-        defender_troop_type = defender.general_info.take_troops_type
+        attacker_troop_type = attacker.take_troops_type
+        defender_troop_type = defender.take_troops_type
         if restriction_relation.get(attacker_troop_type) == defender_troop_type:
             return 1  # Attacker counters defender
         elif restriction_relation.get(defender_troop_type) == attacker_troop_type:
@@ -104,6 +104,10 @@ class DamageService:
     def calculate_attribute_damage(self, attacker_level, defender_level, attacker_attr, defender_attr):
         attacker_multiplier = max(attacker_level - 20, 0) / 50 + 1
         defender_multiplier = max(defender_level - 20, 0) / 50 + 1
+        if not attacker_attr:
+            attacker_attr = 0
+        if not defender_attr:
+            defender_attr = 0
         return attacker_attr * attacker_multiplier - defender_attr * defender_multiplier
 
     def calculate_troop_damage(self, troops):

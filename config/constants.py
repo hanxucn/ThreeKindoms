@@ -6,19 +6,25 @@ is_nohealing = "no_healing"
 defection = "defection"
 
 # DEBUFF 负面状态
-# 被嘲讽
+# 被震慑
 is_stunned = "is_stunned"
+
 # 技穷
 is_silenced = "is_silenced"
+
 # 缴械
 is_disarmed = "is_disarmed"
-# 震慑
+
+# 嘲讽
 is_taunted = "is_taunted"
+
 # 被伪报
 is_discommand = "is_discommand"
+
 # 混乱
 is_confusion = "is_confusion"
 
+# 虚弱
 is_weakness = "is_weakness"
 
 # BUFF 增益状态

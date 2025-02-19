@@ -51,7 +51,7 @@ class JixingzhenSkill(FormationSkill):
                 index_defender = attackers.index(random_attacker)
                 if len(attackers) > 2:
                     attackers[3 - index_defender].add_buff("intelligence_damage_reduction", 18, 3)
-            battle_service.skill_attack(battle_service, attackers, defenders, current_turn)
+            battle_service.skill_attack(skill_own_attacker, defenders, self, targets=defenders, self_group=attackers, curr_turn=current_turn)
         else:
             reduction_factor = skill_own_attacker.get_general_property(attackers[0].general_info, 45)["power"] * 0.1
             for defender in defenders:

@@ -1,3 +1,4 @@
+import logging
 from service.skill_service import SkillService
 from typing import Optional, List, Dict, Union
 
@@ -37,6 +38,7 @@ class GeneralService:
     # user_add_property：可分配属性，需要先调用 overall_can_allocation_property() 方法计算，由前端提供值
     def __init__(
         self,
+        name,
         general_info,
         is_dynamic,
         is_classic,
@@ -47,6 +49,7 @@ class GeneralService:
         equipped_skill_names: Optional[List[Dict[str, str]]] = None,
         user_add_property=None,
     ):
+        self.name = name
         # 验证 equipped_skill_names 格式
         if equipped_skill_names is not None:
             if not isinstance(equipped_skill_names, list):
@@ -82,22 +85,26 @@ class GeneralService:
         self.user_add_property = user_add_property
         self.counter_status_list = []
         self.receive_attack_cnt = 0
+        self.curr_power = self.general_info["basic_power"] + (self.user_level - 1) * self.general_info["power_up"] + self.user_add_property["power"]
+        self.curr_intelligence = self.general_info["basic_intelligence"] + (self.user_level - 1) * self.general_info["intelligence_up"] + self.user_add_property["intelligence"]
+        self.curr_speed = self.general_info["basic_speed"] + (self.user_level - 1) * self.general_info["speed_up"] + self.user_add_property["speed"]
+        self.curr_defense = self.general_info["basic_defense"] + (self.user_level - 1) * self.general_info["defense_up"] + self.user_add_property["defense"]
 
     def is_alive(self):
         return self.alive and self.general_info["take_troops"] > 0
 
     def get_skills(self):
-        skill_list = set()
+        skills = {}
         skill_service = SkillService()
         for skill_info in self.skill_names:
             skill = skill_service.get_skill(skill_info["name"], skill_info["type"])
             if skill:
-                skill_list.add(skill)
-        return list(skill_list)
+                skills[skill_info["name"]] = skill
+        return skills
 
     def get_skill_types(self):
         skill_types = set()
-        for skill in self.skills:
+        for skill in self.skills.values():
             skill_types.add(skill.skill_type)
         return list(skill_types)
 
@@ -191,9 +198,9 @@ class GeneralService:
             skill_types.append(skill.skill_type)
         return skill_types
 
-    def execute_skills(self, attackers, defenders, battle_service, turn):
-        for skill in self.skills:
-            skill.apply_effect(self, attackers, battle_service, defenders, turn)
+    def execute_skills(self, attacker, attackers, defenders, battle_service, turn):
+        for skill in self.skills.values():
+            skill.apply_effect(attacker, attackers, defenders, battle_service, turn)
 
     def is_self_preparing_skill(self):
         if self.general_info.get("self_skill")().skill_type == "prepare_active":
@@ -250,9 +257,10 @@ class GeneralService:
         defense_value = (
             general_info["basic_defense"] + (self.user_level - 1) * general_info["defense_up"] + defense_extra
         )
+        logging.info(f"当前将领 {general_info['name']} 的基础属性计算结果：力量 {power_value}，智力 {intelligence_value}，速度 {speed_value}，防御 {defense_value}")
 
         if not (self.user_add_property or user_add_property):
-            raise Exception("Need set user add property!")
+            logging.warning("错误：未设置加点属性！")
 
         user_add_property = self.user_add_property or user_add_property
 
@@ -263,9 +271,15 @@ class GeneralService:
             "defense": defense_value + user_add_property["defense"],
         }
         if not self.take_troops_type:
+            logging.error("错误：未设置将领兵种类型！")
             raise Exception("Need set general take_troops_type")
         ext = self._arms_type_to_property(self.general_info["troop_adaptability"].get(self.take_troops_type))
         general_property = {key: round((value * ext), 2) for key, value in general_property.items()}
+        self.curr_power = general_property["power"]
+        self.curr_intelligence = general_property["intelligence"]
+        self.curr_speed = general_property["speed"]
+        self.curr_defense = general_property["defense"]
+        logging.info(f"将领 {general_info['name']} 最终计算属性为：{general_property}")
         return general_property
 
     def overall_can_allocation_property(self) -> int:
@@ -287,34 +301,15 @@ class GeneralService:
 
         return can_allocation_property
 
-    def ready_fight_general_property(self,  user_add_property, choose_arm_type):
-        """
-        获取准备战斗时将领的数据值，此数值计算为开始战斗前的最终属性数值。会影响
-        :param user_add_property: 用户选择的加点，这个值从前端传入参数，是用户自己分配的加点（根据上面）
-        :param choose_arm_type: 用户选择的兵种类型
-        :return:
-        """
-        # 只计算原始没有任何其他情况到对应等级的属性
-        origin_general_property = self.get_general_property(self.general_info)
-        general_property = {
-            "power": round(origin_general_property["power"] + user_add_property["power"], 2),
-            "intelligence": round(origin_general_property["intelligence"] + user_add_property["intelligence"], 2),
-            "speed": round(origin_general_property["speed"] + user_add_property["speed"], 2),
-            "defense": round(origin_general_property["defense"] + user_add_property["defense"], 2),
-        }
-        if choose_arm_type:
-            ext = self._arms_type_to_property(self.general_info["troop_adaptability"].get(choose_arm_type))
-            general_property = {key: value * ext for key, value in general_property.items()}
-
-        return general_property
-
 
 if __name__ == "__main__":
     from config.generals import guanyu
 
-    bs = GeneralService(guanyu, True, False, 5, 45)
+    bs = GeneralService(guanyu["name"], guanyu, True, False, 5, 45)
     can_alloc_property = bs.overall_can_allocation_property()
-    general_values = bs.ready_fight_general_property(
-        {"power": 80, "intelligence": 0, "speed": 0, "defense": 20}, "shield"
+    general_values = bs.get_general_property(
+        bs.general_info,
+        {"power": 80, "intelligence": 0, "speed": 0, "defense": 20},
+        "shield",
     )
     print(general_values)
